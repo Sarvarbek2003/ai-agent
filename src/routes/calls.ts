@@ -6,6 +6,7 @@ import { asyncHandler, HttpError, routeParam } from "../http";
 import { localDateKey } from "../lib/dates";
 import { presignRecordingUrl } from "../lib/minio";
 import { prisma } from "../lib/prisma";
+import { matchKnownAppName } from "../lib/slug";
 import { enqueueUnique } from "../lib/queue";
 
 export const callsRouter = Router();
@@ -51,7 +52,7 @@ callsRouter.get(
     const operatorNumber = req.query.operatorNumber ? String(req.query.operatorNumber) : undefined;
     const operatorCode = req.query.operatorCode ? String(req.query.operatorCode) : undefined;
     const customerNumber = req.query.customerNumber ? String(req.query.customerNumber) : undefined;
-    const appId = req.query.appId ? String(req.query.appId) : undefined;
+    const appId = req.query.appId ? String(req.query.appId) : req.query.app ? String(req.query.app) : undefined;
 
     const where: Prisma.CallWhereInput = {};
     if (status) {
@@ -65,9 +66,20 @@ callsRouter.get(
       where.operatorNumber = code;
     }
     if (appId) {
-      where.operator = {
-        app: { OR: [{ id: appId }, { slug: appId }, { name: appId }] },
-      };
+      const apps = await prisma.app.findMany({
+        select: { id: true, name: true, slug: true },
+      });
+      const matchedApp =
+        apps.find((app) => app.id === appId || app.slug === appId || app.name === appId) ??
+        matchKnownAppName(appId, apps);
+      const appNames = [...new Set([appId, matchedApp?.name, matchedApp?.slug].filter(Boolean))] as string[];
+
+      where.OR = [
+        ...(matchedApp ? [{ appId: matchedApp.id }] : []),
+        { analysis: { appName: { in: appNames, mode: "insensitive" } } },
+        { analysis: { appName: { contains: matchedApp?.name ?? appId, mode: "insensitive" } } },
+        ...(matchedApp ? [{ operator: { appId: matchedApp.id } }] : []),
+      ];
     }
     if (customerNumber) {
       where.customerNumber = customerNumber;
@@ -86,6 +98,7 @@ callsRouter.get(
           analysis: true,
           transcript: { select: { id: true, durationSec: true } },
           operator: { include: { app: true } },
+          app: true,
         },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
@@ -117,6 +130,7 @@ callsRouter.get(
         transcript: true,
         analysis: true,
         operator: { include: { app: true } },
+        app: true,
       },
     });
 

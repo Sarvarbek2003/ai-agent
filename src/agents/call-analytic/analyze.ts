@@ -2,6 +2,7 @@ import { Call, Transcript } from "@prisma/client";
 import { config } from "../../config";
 import { extractOutputText, getOpenAI, parseJsonText } from "../../lib/openai";
 import { OperatorWithApp } from "../../lib/operators";
+import { AppHint, matchKnownAppName } from "../../lib/slug";
 import {
   CALL_ANALYSIS_INSTRUCTIONS,
   CallAnalysisResult,
@@ -24,23 +25,25 @@ function formatTranscript(transcript: Transcript): string {
     .join("\n");
 }
 
+function fallbackText(value: string | undefined, fallback = "unknown"): string {
+  const text = value?.trim();
+  return text ? text : fallback;
+}
+
 export async function analyzeTranscript(
   call: Call,
   transcript: Transcript,
-  operator?: OperatorWithApp | null,
+  options?: {
+    operator?: OperatorWithApp | null;
+    apps?: AppHint[];
+  },
 ): Promise<{
   result: CallAnalysisResult;
   responseId?: string;
 }> {
   const openai = getOpenAI();
-  const operatorDirectory = operator
-    ? {
-        operatorName: operator.name,
-        operatorCode: operator.code,
-        appName: operator.app.name,
-        appSlug: operator.app.slug,
-      }
-    : null;
+  const apps = options?.apps ?? [];
+  const operator = options?.operator;
 
   const response = await openai.responses.create({
     model: config.analysisModel,
@@ -63,7 +66,19 @@ export async function analyzeTranscript(
                   durationSec: call.durationSec,
                   startedAt: call.startedAt,
                   endedAt: call.endedAt,
-                  operatorDirectory,
+                  languagePriority: {
+                    default: "uz",
+                    note: "Operators mostly speak Uzbek. Detect any other language from the transcript.",
+                  },
+                  knownApps: apps.map((app) => ({ name: app.name, slug: app.slug })),
+                  operatorDirectoryHint: operator
+                    ? {
+                        extensionCode: operator.code,
+                        possibleName: operator.name,
+                        possibleApp: operator.app.name,
+                        note: "Helper only. Prefer names spoken in the transcript.",
+                      }
+                    : null,
                 },
                 transcript: formatTranscript(transcript),
               },
@@ -85,15 +100,15 @@ export async function analyzeTranscript(
   });
 
   const result = parseJsonText<CallAnalysisResult>(extractOutputText(response));
-  if (operatorDirectory) {
-    result.operatorName = operatorDirectory.operatorName;
-    result.operatorCode = operatorDirectory.operatorCode;
-    result.appName = operatorDirectory.appName;
-  } else {
-    result.operatorName = result.operatorName || "unknown";
-    result.operatorCode = call.firstAnswer || call.operatorNumber || result.operatorCode || "unknown";
-    result.appName = result.appName || "unknown";
-  }
+  const detectedAppName = fallbackText(result.appName);
+  const matchedApp = matchKnownAppName(detectedAppName, apps);
+
+  result.operatorName = fallbackText(result.operatorName);
+  result.operatorCode = fallbackText(
+    result.operatorCode !== "unknown" ? result.operatorCode : undefined,
+    call.firstAnswer || call.operatorNumber || "unknown",
+  );
+  result.appName = matchedApp?.name ?? detectedAppName;
 
   return {
     result,

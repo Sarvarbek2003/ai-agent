@@ -1,6 +1,7 @@
 import { CallStatus, Prisma } from "@prisma/client";
 import { config } from "../../config";
 import { collectOperatorCodes, findOperatorByCodes } from "../../lib/operators";
+import { matchKnownAppName } from "../../lib/slug";
 import { prisma } from "../../lib/prisma";
 import { analyzeTranscript } from "./analyze";
 import { appendCallToDailyThread } from "./daily-thread";
@@ -93,7 +94,15 @@ export async function processCall(callId: string, options?: { force?: boolean })
       call.operatorNumber = operator.code;
     }
 
-    const { result, responseId } = await analyzeTranscript(call, savedTranscript, operator);
+    const apps = await prisma.app.findMany({
+      select: { id: true, name: true, slug: true },
+      orderBy: { name: "asc" },
+    });
+
+    const { result, responseId } = await analyzeTranscript(call, savedTranscript, {
+      operator,
+      apps,
+    });
     const analysis = await prisma.callAnalysis.upsert({
       where: { callId: call.id },
       create: {
@@ -110,6 +119,14 @@ export async function processCall(callId: string, options?: { force?: boolean })
         ...result,
       },
     });
+
+    const matchedApp = matchKnownAppName(result.appName, apps);
+    if (matchedApp) {
+      await prisma.call.update({
+        where: { id: call.id },
+        data: { appId: matchedApp.id },
+      });
+    }
 
     try {
       const thread = await appendCallToDailyThread({
