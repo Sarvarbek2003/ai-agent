@@ -52,8 +52,9 @@ export async function transcribeCallRecording(
   const result = await openai.audio.transcriptions.create({
     file,
     model: config.transcribeModel,
-    response_format: "diarized_json",
+    // response_format: "diarized_json",
     chunking_strategy: "auto",
+    prompt: "Sen call-center suhbatlarini tahlil qiluvchi AI'san. Audio transkripsiyasidan operator va mijozni aniqlagin. Operator ismi, qaysi ilova operatori ekanligi, mijoz murojaatining sababini, muammo kategoriyasini, mijoz kayfiyatini, operatorning tushuntirish sifatini va muammo hal bo'lgan-bo'lmaganini aniqlagin. Har bir qo'ng'iroq uchun qisqa note yarat. Natijani JSON formatida qaytar."
   });
 
   const raw = result as unknown as {

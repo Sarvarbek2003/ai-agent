@@ -17,7 +17,7 @@ export const config = {
   databaseUrl: requiredInProduction("DATABASE_URL"),
   openaiApiKey: optional("OPENAI_API_KEY"),
   analysisModel: optional("OPENAI_ANALYSIS_MODEL", "gpt-4o"),
-  transcribeModel: "gpt-4o-transcribe-diarize",
+  transcribeModel: "gpt-transcribe",
   newtelWebhookKey: optional("NEWTEL_WEBHOOK_KEY"),
   publicBaseUrl: optional("PUBLIC_BASE_URL", "http://localhost:5050").replace(/\/$/, ""),
   timezone: optional("APP_TIMEZONE", "Asia/Tashkent"),
