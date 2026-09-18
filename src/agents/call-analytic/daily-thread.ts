@@ -67,6 +67,9 @@ export async function appendCallToDailyThread(params: {
                 vpbxId: params.call.vpbxId,
                 direction: params.call.direction,
                 operatorNumber: params.call.operatorNumber,
+                operatorName: params.analysis.operatorName,
+                operatorCode: params.analysis.operatorCode,
+                appName: params.analysis.appName,
                 customerNumber: params.call.customerNumber,
                 durationSec: params.call.durationSec,
                 transcript: params.transcript.fullText,
@@ -93,6 +96,9 @@ type CallAnalysisResultLike = Pick<
   | "operatorUnderstoodCustomer"
   | "customerUnderstoodOperator"
   | "problemResolved"
+  | "operatorName"
+  | "operatorCode"
+  | "appName"
   | "summary"
   | "internalNote"
   | "score"

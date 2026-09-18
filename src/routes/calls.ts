@@ -4,6 +4,7 @@ import { processCall } from "../agents/call-analytic/processor";
 import { config } from "../config";
 import { asyncHandler, HttpError, routeParam } from "../http";
 import { localDateKey } from "../lib/dates";
+import { presignRecordingUrl } from "../lib/minio";
 import { prisma } from "../lib/prisma";
 import { enqueueUnique } from "../lib/queue";
 
@@ -48,7 +49,9 @@ callsRouter.get(
     const status = req.query.status ? String(req.query.status) : undefined;
     const date = req.query.date ? String(req.query.date) : undefined;
     const operatorNumber = req.query.operatorNumber ? String(req.query.operatorNumber) : undefined;
+    const operatorCode = req.query.operatorCode ? String(req.query.operatorCode) : undefined;
     const customerNumber = req.query.customerNumber ? String(req.query.customerNumber) : undefined;
+    const appId = req.query.appId ? String(req.query.appId) : undefined;
 
     const where: Prisma.CallWhereInput = {};
     if (status) {
@@ -57,8 +60,14 @@ callsRouter.get(
       }
       where.status = status as CallStatus;
     }
-    if (operatorNumber) {
-      where.operatorNumber = operatorNumber;
+    const code = operatorCode || operatorNumber;
+    if (code) {
+      where.operatorNumber = code;
+    }
+    if (appId) {
+      where.operator = {
+        app: { OR: [{ id: appId }, { slug: appId }, { name: appId }] },
+      };
     }
     if (customerNumber) {
       where.customerNumber = customerNumber;
@@ -73,7 +82,11 @@ callsRouter.get(
     const [items, total] = await Promise.all([
       prisma.call.findMany({
         where,
-        include: { analysis: true, transcript: { select: { id: true, durationSec: true } } },
+        include: {
+          analysis: true,
+          transcript: { select: { id: true, durationSec: true } },
+          operator: { include: { app: true } },
+        },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
         take: limit,
@@ -103,6 +116,7 @@ callsRouter.get(
         events: { orderBy: { receivedAt: "asc" } },
         transcript: true,
         analysis: true,
+        operator: { include: { app: true } },
       },
     });
 
@@ -111,6 +125,45 @@ callsRouter.get(
     }
 
     res.json(call);
+  }),
+);
+
+callsRouter.get(
+  "/:id/recording",
+  asyncHandler(async (req, res) => {
+    const id = routeParam(req.params.id);
+    const call = await prisma.call.findFirst({
+      where: {
+        OR: [{ id }, { vpbxId: id }],
+      },
+      select: {
+        id: true,
+        vpbxId: true,
+        recordingObjectKey: true,
+        recordingUrl: true,
+        recordingMimeType: true,
+        recordingSizeBytes: true,
+      },
+    });
+
+    if (!call) {
+      throw new HttpError(404, "Call not found");
+    }
+
+    if (!call.recordingObjectKey) {
+      throw new HttpError(404, "Recording is not stored in MinIO yet");
+    }
+
+    const url = await presignRecordingUrl(call.recordingObjectKey);
+    res.json({
+      callId: call.id,
+      vpbxId: call.vpbxId,
+      objectKey: call.recordingObjectKey,
+      mimeType: call.recordingMimeType,
+      sizeBytes: call.recordingSizeBytes,
+      url,
+      expiresIn: 3600,
+    });
   }),
 );
 

@@ -5,7 +5,8 @@ The audio may be in Uzbek, Russian, or mixed language.
 
 Rules:
 - Use only information present in the transcript and the provided call metadata.
-- Do not invent names, facts, promises, or outcomes that are not in the conversation.
+- If metadata.operatorDirectory is provided, that is the source of truth for operator name, operator code, and app. Use that name in the summary and internal note.
+- Do not invent names, facts, promises, or outcomes that are not in the conversation or operator directory.
 - If something is not clear from the transcript, use "unknown".
 - Categorical fields must stay in English enums.
 - Descriptive fields (customerMainProblem, operatorCommunicationQuality, summary, internalNote) must be written in the conversation language. If mixed, use Uzbek.
@@ -18,9 +19,10 @@ Determine:
 5. Whether the operator understood the customer.
 6. Whether the customer understood the operator.
 7. Whether the problem was resolved.
-8. Short summary.
-9. Internal note for daily reporting.
+8. Short summary. Mention the known operator name, code, and app if they are provided in metadata.
+9. Internal note for daily reporting. Include operator name, operator code, and app.
 10. Score from 0 to 100 for operator handling quality.
+11. Operator identity: if metadata.operatorDirectory is present, copy operatorName, operatorCode, and appName from it. Do not invent a different operator. If it is missing, use "unknown" and do not guess a real name from thin air.
 
 Return only valid JSON that matches the schema.`;
 
@@ -50,6 +52,9 @@ export const callAnalysisJsonSchema = {
     "operatorUnderstoodCustomer",
     "customerUnderstoodOperator",
     "problemResolved",
+    "operatorName",
+    "operatorCode",
+    "appName",
     "summary",
     "internalNote",
     "score",
@@ -86,6 +91,9 @@ export const callAnalysisJsonSchema = {
       type: "string",
       enum: ["yes", "no", "partial", "unknown"],
     },
+    operatorName: { type: "string" },
+    operatorCode: { type: "string" },
+    appName: { type: "string" },
     summary: { type: "string" },
     internalNote: { type: "string" },
     score: { type: "integer", minimum: 0, maximum: 100 },
@@ -135,9 +143,11 @@ export const dailyReportJsonSchema = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["vpbxId", "reason", "score"],
+        required: ["vpbxId", "operatorName", "appName", "reason", "score"],
         properties: {
           vpbxId: { type: "string" },
+          operatorName: { type: "string" },
+          appName: { type: "string" },
           reason: { type: "string" },
           score: { type: "integer" },
         },
@@ -159,6 +169,9 @@ export type CallAnalysisResult = {
   operatorUnderstoodCustomer: string;
   customerUnderstoodOperator: string;
   problemResolved: string;
+  operatorName: string;
+  operatorCode: string;
+  appName: string;
   summary: string;
   internalNote: string;
   score: number;
@@ -174,7 +187,7 @@ export type DailyReportResult = {
   topProblemCategories: Array<{ category: string; count: number }>;
   customerMoodSummary: string;
   operatorQualitySummary: string;
-  notableCalls: Array<{ vpbxId: string; reason: string; score: number }>;
+  notableCalls: Array<{ vpbxId: string; operatorName: string; appName: string; reason: string; score: number }>;
   dailySummary: string;
   recommendations: string[];
 };

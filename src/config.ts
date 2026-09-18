@@ -21,7 +21,15 @@ export const config = {
   newtelWebhookKey: optional("NEWTEL_WEBHOOK_KEY"),
   publicBaseUrl: optional("PUBLIC_BASE_URL", "http://localhost:5050").replace(/\/$/, ""),
   timezone: optional("APP_TIMEZONE", "Asia/Tashkent"),
-  storageDir: optional("STORAGE_DIR", "storage/recordings"),
+  minio: {
+    endPoint: optional("MINIO_ENDPOINT", "localhost"),
+    port: Number(process.env.MINIO_PORT) || 9000,
+    useSSL: optional("MINIO_USE_SSL", "false") === "true",
+    accessKey: optional("MINIO_ACCESS_KEY", "minioadmin"),
+    secretKey: optional("MINIO_SECRET_KEY", "minioadmin"),
+    bucket: optional("MINIO_BUCKET", "call-recordings"),
+    publicUrl: optional("MINIO_PUBLIC_URL").replace(/\/$/, ""),
+  },
 };
 
 export function webhookUrl(): string {

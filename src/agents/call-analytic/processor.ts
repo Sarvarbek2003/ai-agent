@@ -1,15 +1,16 @@
 import { CallStatus, Prisma } from "@prisma/client";
 import { config } from "../../config";
+import { collectOperatorCodes, findOperatorByCodes } from "../../lib/operators";
 import { prisma } from "../../lib/prisma";
 import { analyzeTranscript } from "./analyze";
 import { appendCallToDailyThread } from "./daily-thread";
-import { downloadRecording } from "./recording";
+import { downloadAndStoreRecording } from "./recording";
 import { transcribeCallRecording } from "./transcribe";
 
 export async function processCall(callId: string, options?: { force?: boolean }): Promise<void> {
   const call = await prisma.call.findUnique({
     where: { id: callId },
-    include: { transcript: true, analysis: true },
+    include: { transcript: true, analysis: true, operator: { include: { app: true } } },
   });
 
   if (!call) {
@@ -37,7 +38,7 @@ export async function processCall(callId: string, options?: { force?: boolean })
       data: { status: CallStatus.transcribing, failedReason: null },
     });
 
-    const recording = await downloadRecording({
+    const recording = await downloadAndStoreRecording({
       url: call.callRecordLink,
       vpbxId: call.vpbxId,
     });
@@ -45,12 +46,15 @@ export async function processCall(callId: string, options?: { force?: boolean })
     await prisma.call.update({
       where: { id: call.id },
       data: {
-        recordingPath: recording.filePath,
+        recordingBucket: recording.bucket,
+        recordingObjectKey: recording.objectKey,
+        recordingUrl: recording.url,
         recordingMimeType: recording.mimeType,
+        recordingSizeBytes: recording.sizeBytes,
       },
     });
 
-    const transcript = await transcribeCallRecording(recording.filePath);
+    const transcript = await transcribeCallRecording(recording.body, recording.fileName);
     const savedTranscript = await prisma.transcript.upsert({
       where: { callId: call.id },
       create: {
@@ -75,7 +79,21 @@ export async function processCall(callId: string, options?: { force?: boolean })
       data: { status: CallStatus.analyzing },
     });
 
-    const { result, responseId } = await analyzeTranscript(call, savedTranscript);
+    const operator =
+      call.operator ??
+      (await findOperatorByCodes(
+        collectOperatorCodes([call.firstAnswer, call.operatorNumber, call.allAnswer]),
+      ));
+    if (operator && !call.operatorId) {
+      await prisma.call.update({
+        where: { id: call.id },
+        data: { operatorId: operator.id, operatorNumber: operator.code },
+      });
+      call.operatorId = operator.id;
+      call.operatorNumber = operator.code;
+    }
+
+    const { result, responseId } = await analyzeTranscript(call, savedTranscript, operator);
     const analysis = await prisma.callAnalysis.upsert({
       where: { callId: call.id },
       create: {

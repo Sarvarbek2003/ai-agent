@@ -1,7 +1,5 @@
-import { mkdir, stat, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { config } from "../../config";
-import { sleep } from "../../lib/dates";
+import { localDateKey, sleep } from "../../lib/dates";
+import { uploadRecordingObject } from "../../lib/minio";
 
 const AUDIO_TYPES: Record<string, string> = {
   "audio/mpeg": "mp3",
@@ -15,6 +13,16 @@ const AUDIO_TYPES: Record<string, string> = {
   "audio/x-m4a": "m4a",
 };
 
+export type StoredRecording = {
+  bucket: string;
+  objectKey: string;
+  url: string;
+  mimeType: string;
+  sizeBytes: number;
+  fileName: string;
+  body: Buffer;
+};
+
 function extensionFrom(url: string, contentType?: string | null): string {
   const mime = contentType?.split(";")[0]?.trim().toLowerCase();
   if (mime && AUDIO_TYPES[mime]) {
@@ -22,23 +30,25 @@ function extensionFrom(url: string, contentType?: string | null): string {
   }
 
   const cleanUrl = url.split("?")[0] ?? url;
-  const ext = path.extname(cleanUrl).replace(".", "").toLowerCase();
-  if (ext) {
+  const ext = cleanUrl.split(".").pop()?.toLowerCase();
+  if (ext && ext.length <= 5 && /^[a-z0-9]+$/.test(ext)) {
     return ext;
   }
 
   return "mp3";
 }
 
-export async function downloadRecording(params: {
+function safeKeyPart(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, "_");
+}
+
+export async function downloadAndStoreRecording(params: {
   url: string;
   vpbxId: string;
   attempts?: number;
-}): Promise<{ filePath: string; mimeType: string }> {
+}): Promise<StoredRecording> {
   const attempts = params.attempts ?? 5;
   let lastError: Error | null = null;
-
-  await mkdir(config.storageDir, { recursive: true });
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
@@ -47,17 +57,27 @@ export async function downloadRecording(params: {
         throw new Error(`Recording download failed with HTTP ${response.status}`);
       }
 
-      const mimeType = response.headers.get("content-type") || "audio/mpeg";
+      const mimeType = response.headers.get("content-type")?.split(";")[0]?.trim() || "audio/mpeg";
       const extension = extensionFrom(params.url, mimeType);
-      const filePath = path.join(config.storageDir, `${params.vpbxId}.${extension}`);
-      const bytes = Buffer.from(await response.arrayBuffer());
-      await writeFile(filePath, bytes);
-      const info = await stat(filePath);
-      if (info.size < 256) {
+      const body = Buffer.from(await response.arrayBuffer());
+      if (body.length < 256) {
         throw new Error("Recording file is too small, likely not ready yet");
       }
 
-      return { filePath, mimeType };
+      const fileName = `${safeKeyPart(params.vpbxId)}.${extension}`;
+      const objectKey = `calls/${localDateKey()}/${fileName}`;
+      const stored = await uploadRecordingObject({
+        objectKey,
+        body,
+        mimeType,
+      });
+
+      return {
+        ...stored,
+        mimeType,
+        fileName,
+        body,
+      };
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       if (attempt < attempts) {
@@ -66,5 +86,5 @@ export async function downloadRecording(params: {
     }
   }
 
-  throw lastError ?? new Error("Unable to download call recording");
+  throw lastError ?? new Error("Unable to download and store call recording");
 }

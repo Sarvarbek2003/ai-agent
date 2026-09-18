@@ -1,6 +1,7 @@
 import { Call, Transcript } from "@prisma/client";
 import { config } from "../../config";
 import { extractOutputText, getOpenAI, parseJsonText } from "../../lib/openai";
+import { OperatorWithApp } from "../../lib/operators";
 import {
   CALL_ANALYSIS_INSTRUCTIONS,
   CallAnalysisResult,
@@ -23,11 +24,24 @@ function formatTranscript(transcript: Transcript): string {
     .join("\n");
 }
 
-export async function analyzeTranscript(call: Call, transcript: Transcript): Promise<{
+export async function analyzeTranscript(
+  call: Call,
+  transcript: Transcript,
+  operator?: OperatorWithApp | null,
+): Promise<{
   result: CallAnalysisResult;
   responseId?: string;
 }> {
   const openai = getOpenAI();
+  const operatorDirectory = operator
+    ? {
+        operatorName: operator.name,
+        operatorCode: operator.code,
+        appName: operator.app.name,
+        appSlug: operator.app.slug,
+      }
+    : null;
+
   const response = await openai.responses.create({
     model: config.analysisModel,
     instructions: CALL_ANALYSIS_INSTRUCTIONS,
@@ -44,9 +58,12 @@ export async function analyzeTranscript(call: Call, transcript: Transcript): Pro
                   direction: call.direction,
                   customerNumber: call.customerNumber,
                   operatorNumber: call.operatorNumber,
+                  firstAnswer: call.firstAnswer,
+                  allAnswer: call.allAnswer,
                   durationSec: call.durationSec,
                   startedAt: call.startedAt,
                   endedAt: call.endedAt,
+                  operatorDirectory,
                 },
                 transcript: formatTranscript(transcript),
               },
@@ -67,8 +84,19 @@ export async function analyzeTranscript(call: Call, transcript: Transcript): Pro
     },
   });
 
+  const result = parseJsonText<CallAnalysisResult>(extractOutputText(response));
+  if (operatorDirectory) {
+    result.operatorName = operatorDirectory.operatorName;
+    result.operatorCode = operatorDirectory.operatorCode;
+    result.appName = operatorDirectory.appName;
+  } else {
+    result.operatorName = result.operatorName || "unknown";
+    result.operatorCode = call.firstAnswer || call.operatorNumber || result.operatorCode || "unknown";
+    result.appName = result.appName || "unknown";
+  }
+
   return {
-    result: parseJsonText<CallAnalysisResult>(extractOutputText(response)),
+    result,
     responseId: response.id,
   };
 }

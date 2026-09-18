@@ -1,11 +1,19 @@
 import "dotenv/config";
 import { app } from "./app";
 import { config, webhookUrl } from "./config";
+import { ensureRecordingsBucket } from "./lib/minio";
+import { ensureDefaultApps } from "./lib/operators";
 
 const server = app.listen(config.port, () => {
   console.log(`Server running on http://localhost:${config.port}`);
   console.log(`Swagger UI: http://localhost:${config.port}/docs`);
   console.log(`NewTel webhook: ${webhookUrl()}`);
+  void ensureDefaultApps().catch((error) => {
+    console.error("Default apps seed failed", error);
+  });
+  void ensureRecordingsBucket().catch((error) => {
+    console.error("MinIO bucket setup failed", error);
+  });
 });
 
 server.on("error", (error: NodeJS.ErrnoException) => {

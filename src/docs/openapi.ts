@@ -12,6 +12,8 @@ export const openApiSpec = {
   tags: [
     { name: "Health" },
     { name: "Agents" },
+    { name: "Apps" },
+    { name: "Operators" },
     { name: "Webhooks" },
     { name: "Calls" },
     { name: "Reports" },
@@ -31,6 +33,7 @@ export const openApiSpec = {
                   properties: {
                     ok: { type: "boolean" },
                     database: { type: "string" },
+                    minio: { type: "string" },
                     webhookUrl: { type: "string" },
                   },
                 },
@@ -47,6 +50,135 @@ export const openApiSpec = {
         responses: {
           "200": { description: "Agent catalog" },
         },
+      },
+    },
+    "/apps": {
+      get: {
+        tags: ["Apps"],
+        summary: "List apps such as MilliyPay, AnjirPay, Migsend",
+        parameters: [
+          { name: "includeOperators", in: "query", schema: { type: "boolean" } },
+        ],
+        responses: { "200": { description: "Apps" } },
+      },
+      post: {
+        tags: ["Apps"],
+        summary: "Create an app",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["name"],
+                properties: {
+                  name: { type: "string", example: "MilliyPay" },
+                  slug: { type: "string", example: "milliy-pay" },
+                },
+              },
+            },
+          },
+        },
+        responses: { "201": { description: "Created" } },
+      },
+    },
+    "/apps/{id}": {
+      get: {
+        tags: ["Apps"],
+        summary: "Get an app with its operators",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "App" } },
+      },
+      patch: {
+        tags: ["Apps"],
+        summary: "Update an app",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  slug: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Updated" } },
+      },
+      delete: {
+        tags: ["Apps"],
+        summary: "Delete an app that has no operators",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "204": { description: "Deleted" } },
+      },
+    },
+    "/operators": {
+      get: {
+        tags: ["Operators"],
+        summary: "List operators with name, code, and app",
+        parameters: [
+          { name: "appId", in: "query", schema: { type: "string" } },
+          { name: "code", in: "query", schema: { type: "string", example: "103" } },
+        ],
+        responses: { "200": { description: "Operators" } },
+      },
+      post: {
+        tags: ["Operators"],
+        summary: "Create an operator. code is the NewTel firstAnswer/allAnswer extension, e.g. 103",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["name", "code", "appId"],
+                properties: {
+                  name: { type: "string", example: "Dilshod" },
+                  code: { type: "string", example: "103" },
+                  appId: { type: "string", example: "milliy-pay" },
+                },
+              },
+            },
+          },
+        },
+        responses: { "201": { description: "Created" } },
+      },
+    },
+    "/operators/{id}": {
+      get: {
+        tags: ["Operators"],
+        summary: "Get operator by id or code",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Operator" } },
+      },
+      patch: {
+        tags: ["Operators"],
+        summary: "Update operator name, code, or app",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  name: { type: "string" },
+                  code: { type: "string" },
+                  appId: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Updated" } },
+      },
+      delete: {
+        tags: ["Operators"],
+        summary: "Delete an operator",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "204": { description: "Deleted" } },
       },
     },
     "/webhooks/newtel": {
@@ -72,7 +204,7 @@ export const openApiSpec = {
         tags: ["Webhooks"],
         summary: "Receive NewTel VPBX webhook events",
         description:
-          "Stores every event. When inboundCallEnd or outboundCallEnd arrives with status=answered, the call recording is downloaded, transcribed with gpt-4o-transcribe-diarize, analyzed, saved to the database, and appended to the daily OpenAI thread.",
+          "Stores every event. When inboundCallEnd or outboundCallEnd arrives with status=answered, the call recording is downloaded, stored in MinIO, transcribed with gpt-4o-transcribe-diarize, analyzed, saved to the database, and appended to the daily OpenAI thread.",
         requestBody: {
           required: true,
           content: {
@@ -134,6 +266,8 @@ export const openApiSpec = {
             },
           },
           { name: "operatorNumber", in: "query", schema: { type: "string" } },
+          { name: "operatorCode", in: "query", schema: { type: "string", example: "103" } },
+          { name: "appId", in: "query", schema: { type: "string", example: "milliy-pay" } },
           { name: "customerNumber", in: "query", schema: { type: "string" } },
           { name: "page", in: "query", schema: { type: "integer", default: 1 } },
           { name: "limit", in: "query", schema: { type: "integer", default: 20 } },
@@ -157,6 +291,19 @@ export const openApiSpec = {
         responses: {
           "200": { description: "Call details" },
           "404": { description: "Not found" },
+        },
+      },
+    },
+    "/calls/{id}/recording": {
+      get: {
+        tags: ["Calls"],
+        summary: "Get a temporary MinIO URL for the stored call recording",
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string" } },
+        ],
+        responses: {
+          "200": { description: "Presigned recording URL" },
+          "404": { description: "Call or recording not found" },
         },
       },
     },
@@ -270,6 +417,9 @@ export const openApiSpec = {
           operatorUnderstoodCustomer: { type: "string", enum: ["yes", "no", "unknown"] },
           customerUnderstoodOperator: { type: "string", enum: ["yes", "no", "unknown"] },
           problemResolved: { type: "string", enum: ["yes", "no", "partial", "unknown"] },
+          operatorName: { type: "string" },
+          operatorCode: { type: "string" },
+          appName: { type: "string" },
           summary: { type: "string" },
           internalNote: { type: "string" },
           score: { type: "integer", minimum: 0, maximum: 100 },

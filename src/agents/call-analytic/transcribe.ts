@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { toFile } from "openai";
 import { config } from "../../config";
 import { getOpenAI } from "../../lib/openai";
@@ -44,10 +42,12 @@ function asSegments(value: unknown): TranscriptSegment[] {
   });
 }
 
-export async function transcribeCallRecording(filePath: string): Promise<DiarizedTranscript> {
+export async function transcribeCallRecording(
+  audio: Buffer,
+  fileName: string,
+): Promise<DiarizedTranscript> {
   const openai = getOpenAI();
-  const buffer = await readFile(filePath);
-  const file = await toFile(buffer, path.basename(filePath));
+  const file = await toFile(audio, fileName);
 
   const result = await openai.audio.transcriptions.create({
     file,
