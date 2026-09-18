@@ -6,3 +6,125 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum CallDirection {
+  inbound
+  outbound
+  unknown
+}
+
+enum CallStatus {
+  ringing
+  in_progress
+  answered
+  no_answer
+  completed
+  awaiting_recording
+  transcribing
+  analyzing
+  analyzed
+  skipped
+  failed
+}
+
+model WebhookEvent {
+  id             String    @id @default(cuid())
+  source         String    @default("newtel")
+  eventName      String
+  signature      String?
+  signatureValid Boolean   @default(false)
+  vpbxId         String?
+  payload        Json
+  receivedAt     DateTime  @default(now())
+  processedAt    DateTime?
+  callId         String?
+  call           Call?     @relation(fields: [callId], references: [id])
+
+  @@index([vpbxId])
+  @@index([eventName])
+  @@index([receivedAt])
+}
+
+model Call {
+  id                String        @id @default(cuid())
+  vpbxId            String        @unique
+  direction         CallDirection @default(unknown)
+  status            CallStatus    @default(ringing)
+  customerNumber    String?
+  operatorNumber    String?
+  dnid              String?
+  clid              String?
+  firstAnswer       String?
+  allAnswer         Json?
+  durationSec       Int?
+  ringDurationSec   Int?
+  startedAt         DateTime?
+  endedAt           DateTime?
+  answeredAt        DateTime?
+  callRecordLink    String?
+  recordingPath     String?
+  recordingMimeType String?
+  failedReason      String?
+  events            WebhookEvent[]
+  transcript        Transcript?
+  analysis          CallAnalysis?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([operatorNumber])
+  @@index([customerNumber])
+}
+
+model Transcript {
+  id          String   @id @default(cuid())
+  callId      String   @unique
+  call        Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+  model       String
+  durationSec Float?
+  fullText    String
+  segments    Json
+  rawResponse Json
+  createdAt   DateTime @default(now())
+}
+
+model DailyThread {
+  id                   String         @id @default(cuid())
+  localDate            String         @unique
+  timezone             String
+  openaiConversationId String         @unique
+  lastResponseId       String?
+  reportJson           Json?
+  reportText           String?
+  generatedAt          DateTime?
+  createdAt            DateTime       @default(now())
+  analyses             CallAnalysis[]
+}
+
+model CallAnalysis {
+  id                           String       @id @default(cuid())
+  callId                       String       @unique
+  call                         Call         @relation(fields: [callId], references: [id], onDelete: Cascade)
+  dailyThreadId                String?
+  dailyThread                  DailyThread? @relation(fields: [dailyThreadId], references: [id])
+  model                        String
+  customerMainProblem          String?
+  problemCategory              String?
+  customerEmotionalState       String?
+  operatorCommunicationQuality String?
+  operatorUnderstoodCustomer   String?
+  customerUnderstoodOperator   String?
+  problemResolved              String?
+  summary                      String?
+  internalNote                 String?
+  score                        Int?
+  rawJson                      Json
+  openaiResponseId             String?
+  createdAt                    DateTime     @default(now())
+  updatedAt                    DateTime     @updatedAt
+
+  @@index([problemCategory])
+  @@index([score])
+  @@index([createdAt])
+}

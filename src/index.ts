@@ -1,15 +1,16 @@
 import "dotenv/config";
 import { app } from "./app";
+import { config, webhookUrl } from "./config";
 
-const port = Number(process.env.PORT) || 5050;
-
-const server = app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
+const server = app.listen(config.port, () => {
+  console.log(`Server running on http://localhost:${config.port}`);
+  console.log(`Swagger UI: http://localhost:${config.port}/docs`);
+  console.log(`NewTel webhook: ${webhookUrl()}`);
 });
 
 server.on("error", (error: NodeJS.ErrnoException) => {
   if (error.code === "EADDRINUSE") {
-    console.error(`Port ${port} is already in use`);
+    console.error(`Port ${config.port} is already in use`);
     process.exit(1);
   }
 
