@@ -1,10 +1,12 @@
-import { Call, DailyThread, Transcript } from "@prisma/client";
+import { Call, Transcript } from "@prisma/client";
 import { config } from "../../config";
 import { extractOutputText, getOpenAI, parseJsonText } from "../../lib/openai";
 import { AppHint, matchKnownAppName } from "../../lib/slug";
-import { prisma } from "../../lib/prisma";
-import { getOrCreateDailyThread } from "./daily-thread";
-import { CallAnalysisResult, callAnalysisJsonSchema } from "./prompts";
+import {
+  CALL_ANALYSIS_INSTRUCTIONS,
+  CallAnalysisResult,
+  callAnalysisJsonSchema,
+} from "./prompts";
 
 function formatTranscript(transcript: Transcript): string {
   const segments = Array.isArray(transcript.segments) ? transcript.segments : [];
@@ -36,34 +38,27 @@ export async function analyzeTranscript(
 ): Promise<{
   result: CallAnalysisResult;
   responseId?: string;
-  thread: DailyThread;
 }> {
   const openai = getOpenAI();
   const apps = options?.apps ?? [];
-  const thread = await getOrCreateDailyThread(call.endedAt ?? call.createdAt);
 
   const response = await openai.responses.create({
     model: config.analysisModel,
-    conversation: thread.openaiConversationId,
+    instructions: CALL_ANALYSIS_INSTRUCTIONS,
     input: [
       {
         role: "user",
         content: [
           {
             type: "input_text",
-            text: JSON.stringify(
-              {
-                vpbxId: call.vpbxId,
-                direction: call.direction,
-                customerNumber: call.customerNumber,
-                operatorNumber: call.operatorNumber,
-                firstAnswer: call.firstAnswer,
-                durationSec: call.durationSec,
-                transcript: formatTranscript(transcript),
-              },
-              null,
-              2,
-            ),
+            text: JSON.stringify({
+              vpbxId: call.vpbxId,
+              direction: call.direction,
+              firstAnswer: call.firstAnswer,
+              operatorNumber: call.operatorNumber,
+              durationSec: call.durationSec,
+              transcript: formatTranscript(transcript),
+            }),
           },
         ],
       },
@@ -76,11 +71,6 @@ export async function analyzeTranscript(
         schema: callAnalysisJsonSchema,
       },
     },
-  });
-
-  await prisma.dailyThread.update({
-    where: { id: thread.id },
-    data: { lastResponseId: response.id },
   });
 
   const result = parseJsonText<CallAnalysisResult>(extractOutputText(response));
@@ -97,6 +87,5 @@ export async function analyzeTranscript(
   return {
     result,
     responseId: response.id,
-    thread,
   };
 }

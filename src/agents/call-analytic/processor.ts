@@ -4,6 +4,7 @@ import { collectOperatorCodes, findOperatorByCodes, OperatorWithApp } from "../.
 import { matchKnownAppName } from "../../lib/slug";
 import { prisma } from "../../lib/prisma";
 import { analyzeTranscript } from "./analyze";
+import { appendCallToDailyThread } from "./daily-thread";
 import { downloadAndStoreRecording } from "./recording";
 import { transcribeCallRecording } from "./transcribe";
 
@@ -131,21 +132,19 @@ async function analyzeSavedTranscript(call: LoadedCall, transcript: Transcript):
     orderBy: { name: "asc" },
   });
 
-  const { result, responseId, thread } = await analyzeTranscript(call, transcript, {
+  const { result, responseId } = await analyzeTranscript(call, transcript, {
     apps,
   });
-  await prisma.callAnalysis.upsert({
+  const analysis = await prisma.callAnalysis.upsert({
     where: { callId: call.id },
     create: {
       callId: call.id,
-      dailyThreadId: thread.id,
       model: config.analysisModel,
       openaiResponseId: responseId,
       rawJson: result,
       ...result,
     },
     update: {
-      dailyThreadId: thread.id,
       model: config.analysisModel,
       openaiResponseId: responseId,
       rawJson: result,
@@ -159,6 +158,19 @@ async function analyzeSavedTranscript(call: LoadedCall, transcript: Transcript):
       where: { id: call.id },
       data: { appId: matchedApp.id },
     });
+  }
+
+  try {
+    const thread = await appendCallToDailyThread({
+      call,
+      analysis,
+    });
+    await prisma.callAnalysis.update({
+      where: { id: analysis.id },
+      data: { dailyThreadId: thread.id },
+    });
+  } catch (error) {
+    console.error("Failed to append call to daily OpenAI thread", error);
   }
 
   await prisma.call.update({

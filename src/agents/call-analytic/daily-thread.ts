@@ -1,72 +1,23 @@
-import { DailyThread, Prisma } from "@prisma/client";
+import { Call, CallAnalysis, DailyThread, Prisma } from "@prisma/client";
 import { config } from "../../config";
 import { localDateKey } from "../../lib/dates";
 import { extractOutputText, getOpenAI, parseJsonText } from "../../lib/openai";
 import { prisma } from "../../lib/prisma";
-import { AppHint } from "../../lib/slug";
 import {
-  CALL_ANALYSIS_INSTRUCTIONS,
   DAILY_REPORT_PROMPT,
   DAILY_THREAD_INSTRUCTIONS,
   DailyReportResult,
   dailyReportJsonSchema,
 } from "./prompts";
 
-export const ANALYSIS_PROMPT_VERSION = 1;
-
-function buildDailySystemPrompt(apps: AppHint[]): string {
-  const knownApps =
-    apps.length > 0
-      ? apps.map((app) => `- ${app.name} (${app.slug})`).join("\n")
-      : "- none";
-
-  return [
-    CALL_ANALYSIS_INSTRUCTIONS,
-    "",
-    "Known apps helper list:",
-    knownApps,
-    "",
-    DAILY_THREAD_INSTRUCTIONS,
-  ].join("\n");
-}
-
-async function loadApps(): Promise<AppHint[]> {
-  return prisma.app.findMany({
-    select: { id: true, name: true, slug: true },
-    orderBy: { name: "asc" },
-  });
-}
-
-async function seedAnalysisPrompt(conversationId: string, apps: AppHint[]): Promise<void> {
-  const openai = getOpenAI();
-  await openai.conversations.items.create(conversationId, {
-    items: [
-      {
-        type: "message",
-        role: "system",
-        content: buildDailySystemPrompt(apps),
-      },
-    ],
-  });
-}
-
 export async function getOrCreateDailyThread(date?: Date | string): Promise<DailyThread> {
   const localDate = typeof date === "string" ? date : localDateKey(date);
-  const apps = await loadApps();
 
   const existing = await prisma.dailyThread.findUnique({
     where: { localDate },
   });
   if (existing) {
-    if (existing.promptVersion >= ANALYSIS_PROMPT_VERSION) {
-      return existing;
-    }
-
-    await seedAnalysisPrompt(existing.openaiConversationId, apps);
-    return prisma.dailyThread.update({
-      where: { id: existing.id },
-      data: { promptVersion: ANALYSIS_PROMPT_VERSION },
-    });
+    return existing;
   }
 
   const openai = getOpenAI();
@@ -75,13 +26,12 @@ export async function getOrCreateDailyThread(date?: Date | string): Promise<Dail
       agent: "call-analytic",
       localDate,
       timezone: config.timezone,
-      promptVersion: String(ANALYSIS_PROMPT_VERSION),
     },
     items: [
       {
         type: "message",
         role: "system",
-        content: buildDailySystemPrompt(apps),
+        content: DAILY_THREAD_INSTRUCTIONS,
       },
     ],
   });
@@ -92,7 +42,6 @@ export async function getOrCreateDailyThread(date?: Date | string): Promise<Dail
         localDate,
         timezone: config.timezone,
         openaiConversationId: conversation.id,
-        promptVersion: ANALYSIS_PROMPT_VERSION,
       },
     });
   } catch (error) {
@@ -105,6 +54,52 @@ export async function getOrCreateDailyThread(date?: Date | string): Promise<Dail
     throw error;
   }
 }
+
+export async function appendCallToDailyThread(params: {
+  call: Call;
+  analysis: CallAnalysisResultLike;
+}): Promise<DailyThread> {
+  const thread = await getOrCreateDailyThread(params.call.endedAt ?? params.call.createdAt);
+  const openai = getOpenAI();
+
+  await openai.conversations.items.create(thread.openaiConversationId, {
+    items: [
+      {
+        type: "message",
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: JSON.stringify({
+              type: "analyzed_call",
+              vpbxId: params.call.vpbxId,
+              operatorName: params.analysis.operatorName,
+              operatorCode: params.analysis.operatorCode,
+              appName: params.analysis.appName,
+              problemCategory: params.analysis.problemCategory,
+              problemResolved: params.analysis.problemResolved,
+              score: params.analysis.score,
+              summary: params.analysis.summary,
+            }),
+          },
+        ],
+      },
+    ],
+  });
+
+  return thread;
+}
+
+type CallAnalysisResultLike = Pick<
+  CallAnalysis,
+  | "problemCategory"
+  | "problemResolved"
+  | "operatorName"
+  | "operatorCode"
+  | "appName"
+  | "summary"
+  | "score"
+>;
 
 export async function generateDailyReport(dateKey?: string) {
   const localDate = dateKey || localDateKey();
