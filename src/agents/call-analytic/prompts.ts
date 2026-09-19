@@ -44,6 +44,31 @@ Determine:
 
 Return only valid JSON that matches the schema.`;
 
+export const CALL_ANALYSIS_INSTRUCTIONS_UZBEK = `Sen call-center suhbatlarini tahlil qiluvchi AI'san. Audio transkripsiyasidan operator va mijozni aniqlagin. Operator ismi, qaysi ilova operatori ekanligi, mijoz murojaatining sababini, muammo kategoriyasini, mijoz kayfiyatini, operatorning tushuntirish sifatini va muammo hal bo'lgan-bo'lmaganini aniqlagin. Har bir qo'ng'iroq uchun qisqa note yarat. Natijani JSON formatida qaytar.`;
+
+export const DEFAULT_ANALYSIS_PROMPT_ID = "structured";
+
+export const analysisPromptCatalog = [
+  {
+    id: "structured",
+    name: "Batafsil tahlil",
+    description: "Joriy prompt. Operator ismi va ilovani transkriptdan ajratib, to‘liq JSON tahlil qaytaradi.",
+    instructions: CALL_ANALYSIS_INSTRUCTIONS,
+  },
+  {
+    id: "uzbek-brief",
+    name: "Qisqa o‘zbek tahlili",
+    description: "Yangi prompt. Operator, ilova, muammo, kayfiyat va hal bo‘lishini qisqa tahlil qiladi.",
+    instructions: CALL_ANALYSIS_INSTRUCTIONS_UZBEK,
+  },
+] as const;
+
+export type AnalysisPromptId = (typeof analysisPromptCatalog)[number]["id"];
+
+export function getAnalysisPromptById(id?: string | null) {
+  return analysisPromptCatalog.find((prompt) => prompt.id === id) ?? analysisPromptCatalog[0];
+}
+
 export const DAILY_THREAD_INSTRUCTIONS = `You are the daily memory of a call-center analytic agent.
 
 Throughout the day you will receive analyzed operator-customer calls.

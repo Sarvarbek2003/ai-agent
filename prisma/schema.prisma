@@ -45,6 +45,12 @@ model WebhookEvent {
   @@index([receivedAt])
 }
 
+model AppSetting {
+  id                     String   @id @default("app")
+  activeAnalysisPromptId String   @default("structured")
+  updatedAt              DateTime @updatedAt
+}
+
 model App {
   id        String     @id @default(cuid())
   name      String     @unique
@@ -158,6 +164,7 @@ model CallAnalysis {
   score                        Int?
   rawJson                      Json
   openaiResponseId             String?
+  analysisPromptId             String?
   createdAt                    DateTime     @default(now())
   updatedAt                    DateTime     @updatedAt
 

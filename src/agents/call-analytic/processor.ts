@@ -132,7 +132,7 @@ async function analyzeSavedTranscript(call: LoadedCall, transcript: Transcript):
     orderBy: { name: "asc" },
   });
 
-  const { result, responseId } = await analyzeTranscript(call, transcript, {
+  const { result, responseId, promptId } = await analyzeTranscript(call, transcript, {
     apps,
   });
   const analysis = await prisma.callAnalysis.upsert({
@@ -141,12 +141,14 @@ async function analyzeSavedTranscript(call: LoadedCall, transcript: Transcript):
       callId: call.id,
       model: config.analysisModel,
       openaiResponseId: responseId,
+      analysisPromptId: promptId,
       rawJson: result,
       ...result,
     },
     update: {
       model: config.analysisModel,
       openaiResponseId: responseId,
+      analysisPromptId: promptId,
       rawJson: result,
       ...result,
     },

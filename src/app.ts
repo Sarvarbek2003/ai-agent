@@ -9,6 +9,7 @@ import { agentsRouter } from "./routes/agents";
 import { callsRouter } from "./routes/calls";
 import { operatorsRouter } from "./routes/operators";
 import { reportsRouter } from "./routes/reports";
+import { settingsRouter } from "./routes/settings";
 import { webhookRouter } from "./routes/webhooks";
 
 export const app = express();
@@ -67,6 +68,7 @@ app.use("/operators", operatorsRouter);
 app.use("/webhooks", webhookRouter);
 app.use("/calls", callsRouter);
 app.use("/reports", reportsRouter);
+app.use("/settings", settingsRouter);
 
 mountSwagger(app);
 app.use(errorHandler);

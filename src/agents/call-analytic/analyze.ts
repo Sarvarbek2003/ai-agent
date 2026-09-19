@@ -1,9 +1,9 @@
 import { Call, Transcript } from "@prisma/client";
 import { config } from "../../config";
 import { extractOutputText, getOpenAI, parseJsonText } from "../../lib/openai";
+import { getActiveAnalysisPrompt } from "../../lib/settings";
 import { AppHint, matchKnownAppName } from "../../lib/slug";
 import {
-  CALL_ANALYSIS_INSTRUCTIONS,
   CallAnalysisResult,
   callAnalysisJsonSchema,
 } from "./prompts";
@@ -38,13 +38,15 @@ export async function analyzeTranscript(
 ): Promise<{
   result: CallAnalysisResult;
   responseId?: string;
+  promptId: string;
 }> {
   const openai = getOpenAI();
   const apps = options?.apps ?? [];
+  const prompt = await getActiveAnalysisPrompt();
 
   const response = await openai.responses.create({
     model: config.analysisModel,
-    instructions: CALL_ANALYSIS_INSTRUCTIONS,
+    instructions: prompt.instructions,
     input: [
       {
         role: "user",
@@ -87,5 +89,6 @@ export async function analyzeTranscript(
   return {
     result,
     responseId: response.id,
+    promptId: prompt.id,
   };
 }

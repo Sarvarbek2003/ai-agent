@@ -17,6 +17,7 @@ export const openApiSpec = {
     { name: "Webhooks" },
     { name: "Calls" },
     { name: "Reports" },
+    { name: "Settings" },
   ],
   paths: {
     "/health": {
@@ -365,6 +366,35 @@ export const openApiSpec = {
           { name: "create", in: "query", schema: { type: "boolean" } },
         ],
         responses: { "200": { description: "Daily thread" } },
+      },
+    },
+    "/settings": {
+      get: {
+        tags: ["Settings"],
+        summary: "List analysis prompts and the active prompt",
+        responses: { "200": { description: "Settings" } },
+      },
+      patch: {
+        tags: ["Settings"],
+        summary: "Switch the active analysis prompt without changing prompt text",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["activeAnalysisPromptId"],
+                properties: {
+                  activeAnalysisPromptId: {
+                    type: "string",
+                    enum: ["structured", "uzbek-brief"],
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Updated settings" } },
       },
     },
   },
