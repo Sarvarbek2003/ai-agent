@@ -6,11 +6,11 @@ export type OperatorWithApp = Operator & { app: { id: string; name: string; slug
 
 export async function ensureDefaultApps() {
   for (const app of DEFAULT_APPS) {
-    await prisma.app.upsert({
-      where: { slug: app.slug },
-      update: { name: app.name },
-      create: app,
-    });
+    // await prisma.app.upsert({
+    //   where: { slug: app.slug },
+    //   update: { name: app.name },
+    //   create: app,
+    // });
   }
 }
 
