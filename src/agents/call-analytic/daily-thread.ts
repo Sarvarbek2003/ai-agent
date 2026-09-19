@@ -1,23 +1,72 @@
-import { Call, CallAnalysis, DailyThread, Transcript } from "@prisma/client";
+import { DailyThread, Prisma } from "@prisma/client";
 import { config } from "../../config";
 import { localDateKey } from "../../lib/dates";
 import { extractOutputText, getOpenAI, parseJsonText } from "../../lib/openai";
 import { prisma } from "../../lib/prisma";
+import { AppHint } from "../../lib/slug";
 import {
+  CALL_ANALYSIS_INSTRUCTIONS,
   DAILY_REPORT_PROMPT,
   DAILY_THREAD_INSTRUCTIONS,
   DailyReportResult,
   dailyReportJsonSchema,
 } from "./prompts";
 
+export const ANALYSIS_PROMPT_VERSION = 1;
+
+function buildDailySystemPrompt(apps: AppHint[]): string {
+  const knownApps =
+    apps.length > 0
+      ? apps.map((app) => `- ${app.name} (${app.slug})`).join("\n")
+      : "- none";
+
+  return [
+    CALL_ANALYSIS_INSTRUCTIONS,
+    "",
+    "Known apps helper list:",
+    knownApps,
+    "",
+    DAILY_THREAD_INSTRUCTIONS,
+  ].join("\n");
+}
+
+async function loadApps(): Promise<AppHint[]> {
+  return prisma.app.findMany({
+    select: { id: true, name: true, slug: true },
+    orderBy: { name: "asc" },
+  });
+}
+
+async function seedAnalysisPrompt(conversationId: string, apps: AppHint[]): Promise<void> {
+  const openai = getOpenAI();
+  await openai.conversations.items.create(conversationId, {
+    items: [
+      {
+        type: "message",
+        role: "system",
+        content: buildDailySystemPrompt(apps),
+      },
+    ],
+  });
+}
+
 export async function getOrCreateDailyThread(date?: Date | string): Promise<DailyThread> {
   const localDate = typeof date === "string" ? date : localDateKey(date);
+  const apps = await loadApps();
 
   const existing = await prisma.dailyThread.findUnique({
     where: { localDate },
   });
   if (existing) {
-    return existing;
+    if (existing.promptVersion >= ANALYSIS_PROMPT_VERSION) {
+      return existing;
+    }
+
+    await seedAnalysisPrompt(existing.openaiConversationId, apps);
+    return prisma.dailyThread.update({
+      where: { id: existing.id },
+      data: { promptVersion: ANALYSIS_PROMPT_VERSION },
+    });
   }
 
   const openai = getOpenAI();
@@ -26,83 +75,36 @@ export async function getOrCreateDailyThread(date?: Date | string): Promise<Dail
       agent: "call-analytic",
       localDate,
       timezone: config.timezone,
+      promptVersion: String(ANALYSIS_PROMPT_VERSION),
     },
     items: [
       {
         type: "message",
         role: "system",
-        content: DAILY_THREAD_INSTRUCTIONS,
+        content: buildDailySystemPrompt(apps),
       },
     ],
   });
 
-  return prisma.dailyThread.create({
-    data: {
-      localDate,
-      timezone: config.timezone,
-      openaiConversationId: conversation.id,
-    },
-  });
-}
-
-export async function appendCallToDailyThread(params: {
-  call: Call;
-  transcript: Transcript;
-  analysis: CallAnalysisResultLike;
-}): Promise<DailyThread> {
-  const thread = await getOrCreateDailyThread(params.call.endedAt ?? params.call.createdAt);
-  const openai = getOpenAI();
-
-  await openai.conversations.items.create(thread.openaiConversationId, {
-    items: [
-      {
-        type: "message",
-        role: "user",
-        content: [
-          {
-            type: "input_text",
-            text: JSON.stringify(
-              {
-                type: "analyzed_call",
-                vpbxId: params.call.vpbxId,
-                direction: params.call.direction,
-                operatorNumber: params.call.operatorNumber,
-                operatorName: params.analysis.operatorName,
-                operatorCode: params.analysis.operatorCode,
-                appName: params.analysis.appName,
-                customerNumber: params.call.customerNumber,
-                durationSec: params.call.durationSec,
-                transcript: params.transcript.fullText,
-                analysis: params.analysis,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
+  try {
+    return await prisma.dailyThread.create({
+      data: {
+        localDate,
+        timezone: config.timezone,
+        openaiConversationId: conversation.id,
+        promptVersion: ANALYSIS_PROMPT_VERSION,
       },
-    ],
-  });
-
-  return thread;
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const raced = await prisma.dailyThread.findUnique({ where: { localDate } });
+      if (raced) {
+        return raced;
+      }
+    }
+    throw error;
+  }
 }
-
-type CallAnalysisResultLike = Pick<
-  CallAnalysis,
-  | "customerMainProblem"
-  | "problemCategory"
-  | "customerEmotionalState"
-  | "operatorCommunicationQuality"
-  | "operatorUnderstoodCustomer"
-  | "customerUnderstoodOperator"
-  | "problemResolved"
-  | "operatorName"
-  | "operatorCode"
-  | "appName"
-  | "summary"
-  | "internalNote"
-  | "score"
->;
 
 export async function generateDailyReport(dateKey?: string) {
   const localDate = dateKey || localDateKey();

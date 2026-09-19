@@ -13,14 +13,14 @@ How to find the operator name (PRIMARY SOURCE = transcript):
 - Typical operator greeting: "Assalomu alaykum, xurmatli mijoz, men Anjirpay operator bo'laman, Ismim Abduxon, sizga yordam beraman."
 - Look for patterns like: "ismim X", "mening ismim X", "men X", "operator X", "X operator".
 - The first human operator after the IVR/autobot is the operator. Ignore the autobot's voice as an operator name.
-- metadata.operatorDirectory is only a weak hint (extension code / possible name). Spoken transcript name always wins.
+- metadata.operatorDirectory is only a weak hint if present in a later user message. Spoken transcript name always wins.
 - If no name is spoken, use "unknown". Do not invent a name.
 
 How to find the app name (PRIMARY SOURCE = transcript):
 - Extract the product/app name from the opening IVR/autobot and from the operator greeting.
 - Typical autobot: "Assalomu alaykum, Milliy payga xush kelibsiz. Siz mijozlarni qo'llab-quvvatlash markaziga qo'ng'iroq qildingiz. Xizmat sifatini yaxshilash maqsadida operator bilan suhbatingiz yozib olinadi."
 - The app name can be misspelled or spoken differently: "anjr pay", "millpay", "milliypay", "AnjirPay", "Milliy pay", "mig send". Detect it anyway.
-- Put the name you heard into appName even if it is messy. metadata.knownApps is only a helper list for recognition, not a filter. If the spoken app is not in that list, still write it.
+- Put the name you heard into appName even if it is messy. The known apps list in this conversation is only a helper, not a filter. If the spoken app is not in that list, still write it.
 - Do not invent an app that was never said.
 
 Rules:

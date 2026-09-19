@@ -1,13 +1,10 @@
-import { Call, Transcript } from "@prisma/client";
+import { Call, DailyThread, Transcript } from "@prisma/client";
 import { config } from "../../config";
 import { extractOutputText, getOpenAI, parseJsonText } from "../../lib/openai";
-import { OperatorWithApp } from "../../lib/operators";
 import { AppHint, matchKnownAppName } from "../../lib/slug";
-import {
-  CALL_ANALYSIS_INSTRUCTIONS,
-  CallAnalysisResult,
-  callAnalysisJsonSchema,
-} from "./prompts";
+import { prisma } from "../../lib/prisma";
+import { getOrCreateDailyThread } from "./daily-thread";
+import { CallAnalysisResult, callAnalysisJsonSchema } from "./prompts";
 
 function formatTranscript(transcript: Transcript): string {
   const segments = Array.isArray(transcript.segments) ? transcript.segments : [];
@@ -34,20 +31,20 @@ export async function analyzeTranscript(
   call: Call,
   transcript: Transcript,
   options?: {
-    operator?: OperatorWithApp | null;
     apps?: AppHint[];
   },
 ): Promise<{
   result: CallAnalysisResult;
   responseId?: string;
+  thread: DailyThread;
 }> {
   const openai = getOpenAI();
   const apps = options?.apps ?? [];
-  const operator = options?.operator;
+  const thread = await getOrCreateDailyThread(call.endedAt ?? call.createdAt);
 
   const response = await openai.responses.create({
     model: config.analysisModel,
-    instructions: CALL_ANALYSIS_INSTRUCTIONS,
+    conversation: thread.openaiConversationId,
     input: [
       {
         role: "user",
@@ -56,30 +53,12 @@ export async function analyzeTranscript(
             type: "input_text",
             text: JSON.stringify(
               {
-                metadata: {
-                  vpbxId: call.vpbxId,
-                  direction: call.direction,
-                  customerNumber: call.customerNumber,
-                  operatorNumber: call.operatorNumber,
-                  firstAnswer: call.firstAnswer,
-                  allAnswer: call.allAnswer,
-                  durationSec: call.durationSec,
-                  startedAt: call.startedAt,
-                  endedAt: call.endedAt,
-                  languagePriority: {
-                    default: "uz",
-                    note: "Operators mostly speak Uzbek. Detect any other language from the transcript.",
-                  },
-                  knownApps: apps.map((app) => ({ name: app.name, slug: app.slug })),
-                  operatorDirectoryHint: operator
-                    ? {
-                        extensionCode: operator.code,
-                        possibleName: operator.name,
-                        possibleApp: operator.app.name,
-                        note: "Helper only. Prefer names spoken in the transcript.",
-                      }
-                    : null,
-                },
+                vpbxId: call.vpbxId,
+                direction: call.direction,
+                customerNumber: call.customerNumber,
+                operatorNumber: call.operatorNumber,
+                firstAnswer: call.firstAnswer,
+                durationSec: call.durationSec,
                 transcript: formatTranscript(transcript),
               },
               null,
@@ -99,6 +78,11 @@ export async function analyzeTranscript(
     },
   });
 
+  await prisma.dailyThread.update({
+    where: { id: thread.id },
+    data: { lastResponseId: response.id },
+  });
+
   const result = parseJsonText<CallAnalysisResult>(extractOutputText(response));
   const detectedAppName = fallbackText(result.appName);
   const matchedApp = matchKnownAppName(detectedAppName, apps);
@@ -113,5 +97,6 @@ export async function analyzeTranscript(
   return {
     result,
     responseId: response.id,
+    thread,
   };
 }
