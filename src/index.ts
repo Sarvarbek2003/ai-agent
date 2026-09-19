@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { app } from "./app";
 import { config, webhookUrl } from "./config";
+import { startStaleAnalysisCron } from "./jobs/retry-stale-analyses";
 import { ensureRecordingsBucket } from "./lib/minio";
 import { ensureDefaultApps } from "./lib/operators";
 
@@ -14,6 +15,7 @@ const server = app.listen(config.port, () => {
   void ensureRecordingsBucket().catch((error) => {
     console.error("MinIO bucket setup failed", error);
   });
+  startStaleAnalysisCron();
 });
 
 server.on("error", (error: NodeJS.ErrnoException) => {
