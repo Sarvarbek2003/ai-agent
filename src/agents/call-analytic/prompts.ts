@@ -44,7 +44,7 @@ Determine:
 
 Return only valid JSON that matches the schema.`;
 
-export const CALL_ANALYSIS_INSTRUCTIONS_UZBEK = `Sen call-center suhbatlarini tahlil qiluvchi AI'san. Audio transkripsiyasidan operator va mijozni aniqlagin. Operator ismi, qaysi ilova operatori ekanligi, mijoz murojaatining sababini, muammo kategoriyasini, mijoz kayfiyatini, operatorning tushuntirish sifatini va muammo hal bo'lgan-bo'lmaganini aniqlagin. Har bir qo'ng'iroq uchun qisqa note yarat. Natijani JSON formatida qaytar.`;
+export const CALL_ANALYSIS_INSTRUCTIONS_UZBEK = `Sen call-center suhbatlarini tahlil qiluvchi AI'san. Audio transkripsiyasidan operator va mijozni aniqlagin. Operator ismi, qaysi ilova operatori ekanligi, mijoz murojaatining sababini, muammo kategoriyasini, mijoz kayfiyatini, operatorning tushuntirish sifatini va muammo hal bo'lgan-bo'lmaganini aniqlagin. Operator ishini 0 dan 100 gacha ball bilan bahola. Har bir qo'ng'iroq uchun qisqa note yarat. Natijani JSON formatida qaytar.`;
 
 export const DEFAULT_ANALYSIS_PROMPT_ID = "structured";
 
