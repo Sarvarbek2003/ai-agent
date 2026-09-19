@@ -4,6 +4,7 @@ import { config, webhookUrl } from "./config";
 import { startStaleAnalysisCron } from "./jobs/retry-stale-analyses";
 import { ensureRecordingsBucket } from "./lib/minio";
 import { ensureDefaultApps } from "./lib/operators";
+import { startTelegramBot } from "./telegram/bot";
 
 const server = app.listen(config.port, () => {
   console.log(`Server running on http://localhost:${config.port}`);
@@ -16,6 +17,7 @@ const server = app.listen(config.port, () => {
     console.error("MinIO bucket setup failed", error);
   });
   startStaleAnalysisCron();
+  startTelegramBot();
 });
 
 server.on("error", (error: NodeJS.ErrnoException) => {

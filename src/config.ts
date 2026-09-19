@@ -21,6 +21,11 @@ export const config = {
   newtelWebhookKey: optional("NEWTEL_WEBHOOK_KEY"),
   publicBaseUrl: optional("PUBLIC_BASE_URL", "http://localhost:5050").replace(/\/$/, ""),
   timezone: optional("APP_TIMEZONE", "Asia/Tashkent"),
+  telegramBotToken: optional("TELEGRAM_BOT_TOKEN"),
+  telegramAllowedUserIds: optional("TELEGRAM_ALLOWED_USER_IDS")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean),
   minio: {
     endPoint: optional("MINIO_ENDPOINT", "localhost"),
     port: Number(process.env.MINIO_PORT) || 9000,

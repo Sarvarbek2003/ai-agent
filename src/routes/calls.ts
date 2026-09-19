@@ -1,46 +1,14 @@
 import { CallStatus, Prisma } from "@prisma/client";
 import { Router } from "express";
 import { processCall } from "../agents/call-analytic/processor";
-import { config } from "../config";
 import { asyncHandler, HttpError, routeParam } from "../http";
-import { localDateKey } from "../lib/dates";
+import { localDateKey, localDayRange } from "../lib/dates";
 import { presignRecordingUrl } from "../lib/minio";
 import { prisma } from "../lib/prisma";
 import { matchKnownAppName } from "../lib/slug";
 import { enqueueUnique } from "../lib/queue";
 
 export const callsRouter = Router();
-
-function addOneDay(dateKey: string): string {
-  const date = new Date(`${dateKey}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + 1);
-  return date.toISOString().slice(0, 10);
-}
-
-function timezoneOffset(date: Date, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    timeZoneName: "shortOffset",
-  }).formatToParts(date);
-  const value = parts.find((part) => part.type === "timeZoneName")?.value ?? "GMT+5";
-  const match = value.match(/([+-])(\d{1,2})(?::?(\d{2}))?/);
-  if (!match) {
-    return "+05:00";
-  }
-  const sign = match[1];
-  const hours = match[2]?.padStart(2, "0") ?? "05";
-  const minutes = (match[3] ?? "00").padStart(2, "0");
-  return `${sign}${hours}:${minutes}`;
-}
-
-function localDayRange(dateKey: string) {
-  const sample = new Date(`${dateKey}T12:00:00Z`);
-  const offset = timezoneOffset(sample, config.timezone);
-  return {
-    gte: new Date(`${dateKey}T00:00:00${offset}`),
-    lt: new Date(`${addOneDay(dateKey)}T00:00:00${offset}`),
-  };
-}
 
 callsRouter.get(
   "/",
