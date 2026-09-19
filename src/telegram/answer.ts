@@ -1,27 +1,36 @@
 import { config } from "../config";
 import { extractOutputText, getOpenAI } from "../lib/openai";
 import { queryCallAnalytics, AnalyticsQuery } from "./query";
+import { getDatabaseSchema, runSql } from "./sql";
 
 const INSTRUCTIONS = `You are a call-center analyst assistant for an internal Telegram bot.
 
 Answer only from tool results. Never invent counts, names, or outcomes.
-If the tool returns 0, say 0. If there is no matching data, say so clearly.
+If a tool returns 0, say 0. If there is no matching data, say so clearly.
 Use Asia/Tashkent dates. "bugun" = today's local date.
 
 Payment / to'lov / pul / karta / billing problems → problemCategory=billing. You may also pass search="to'lov".
 Technical / texnik → technical.
 Complaint / shikoyat → complaint.
 
-Reply in the user's language (usually Uzbek). Be short and specific.
-When giving numbers, state the date range, matchingCalls, and uniqueCustomers if available.
-Mention if some calls are not analyzed yet (totalCalls vs analyzedCalls).`;
+Tool choice:
+1. First try query_call_analytics for ordinary stats (counts by day, app, category, operator, resolved).
+2. If that tool cannot answer — custom join, raw text in transcript, mutation, unusual filter, exact SQL needed — call run_sql.
+3. If you need SQL, call get_database_schema first, then run_sql.
+4. run_sql has full access: SELECT, INSERT, UPDATE, DELETE.
+5. Quote table and column names exactly as returned by get_database_schema.
+6. Limit SELECT results (LIMIT 50) unless a single aggregate.
 
-const TOOL = {
+Reply in the user's language (usually Uzbek). Be short and specific.
+When giving numbers, state the date range and the counts from the tool.
+Do not write "manba: sql" yourself.`;
+
+const ANALYTICS_TOOL = {
   type: "function" as const,
   name: "query_call_analytics",
   strict: false,
   description:
-    "Read real analyzed call statistics from the database. Always call this before answering a count, ranking, or 'how many' question.",
+    "Preferred tool for ordinary analyzed-call statistics. Use this first for counts, rankings, and 'how many' questions.",
   parameters: {
     type: "object",
     additionalProperties: false,
@@ -46,9 +55,40 @@ const TOOL = {
   },
 };
 
-function parseToolArgs(raw: string): AnalyticsQuery {
+const SCHEMA_TOOL = {
+  type: "function" as const,
+  name: "get_database_schema",
+  strict: false,
+  description: "Load the live Prisma datamodel (models, fields, enums) before writing SQL.",
+  parameters: {
+    type: "object",
+    additionalProperties: false,
+    properties: {},
+    required: [],
+  },
+};
+
+const SQL_TOOL = {
+  type: "function" as const,
+  name: "run_sql",
+  strict: false,
+  description:
+    "Run raw PostgreSQL when query_call_analytics cannot answer. SELECT uses queryRaw; INSERT/UPDATE/DELETE uses executeRaw. Full access. Call get_database_schema first.",
+  parameters: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      sql: { type: "string", description: "One PostgreSQL statement. Quote Prisma identifiers." },
+    },
+    required: ["sql"],
+  },
+};
+
+const TOOLS = [ANALYTICS_TOOL, SCHEMA_TOOL, SQL_TOOL];
+
+function parseJson(raw: string): Record<string, unknown> {
   try {
-    return JSON.parse(raw) as AnalyticsQuery;
+    return JSON.parse(raw) as Record<string, unknown>;
   } catch {
     return {};
   }
@@ -56,14 +96,15 @@ function parseToolArgs(raw: string): AnalyticsQuery {
 
 export async function answerTelegramQuestion(question: string): Promise<string> {
   const openai = getOpenAI();
+  let usedSql = false;
   let response = await openai.responses.create({
     model: config.analysisModel,
     instructions: INSTRUCTIONS,
     input: question,
-    tools: [TOOL],
+    tools: TOOLS,
   });
 
-  for (let i = 0; i < 3; i += 1) {
+  for (let i = 0; i < 5; i += 1) {
     const calls = (response.output ?? []).filter((item) => item.type === "function_call");
     if (calls.length === 0) {
       break;
@@ -71,8 +112,16 @@ export async function answerTelegramQuestion(question: string): Promise<string> 
 
     const outputs = [];
     for (const call of calls) {
-      const args = parseToolArgs(call.arguments);
-      const result = await queryCallAnalytics(args);
+      const args = parseJson(call.arguments);
+      let result: unknown;
+      if (call.name === "get_database_schema") {
+        result = { schema: getDatabaseSchema() };
+      } else if (call.name === "run_sql") {
+        usedSql = true;
+        result = await runSql(typeof args.sql === "string" ? args.sql : "");
+      } else {
+        result = await queryCallAnalytics(args as AnalyticsQuery);
+      }
       outputs.push({
         type: "function_call_output" as const,
         call_id: call.call_id,
@@ -85,14 +134,18 @@ export async function answerTelegramQuestion(question: string): Promise<string> 
       instructions: INSTRUCTIONS,
       previous_response_id: response.id,
       input: outputs,
-      tools: [TOOL],
+      tools: TOOLS,
     });
   }
 
   const text = extractOutputText(response);
-  if (text) {
-    return text;
+  if (!text) {
+    return "Bazadan javob chiqarib bo'lmadi. Savolni boshqacha berib ko'ring.";
   }
 
-  return "Bazadan javob chiqarib bo'lmadi. Savolni boshqacha berib ko'ring.";
+  if (usedSql && !/manba:\s*sql/i.test(text)) {
+    return `${text}\n\nmanba: sql`;
+  }
+
+  return text;
 }
