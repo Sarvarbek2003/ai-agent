@@ -20,7 +20,7 @@ export async function retryStaleAnalyses(): Promise<number> {
           CallStatus.analyzed,
           CallStatus.failed,
           CallStatus.skipped,
-          CallStatus.ringing,
+          // CallStatus.ringing,
           CallStatus.in_progress,
           CallStatus.no_answer,
         ],
