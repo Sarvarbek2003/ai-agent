@@ -4,6 +4,7 @@ import { enqueueUnique } from "../lib/queue";
 import { prisma } from "../lib/prisma";
 
 const STALE_AFTER_MS = 10 * 60 * 1000;
+const STALE_UNTIL_MS = 30 * 60 * 1000;
 const INTERVAL_MS = 60 * 1000;
 const BATCH_SIZE = 20;
 
@@ -11,16 +12,17 @@ let ticking = false;
 let interval: NodeJS.Timeout | undefined;
 
 export async function retryStaleAnalyses(): Promise<number> {
-  const staleBefore = new Date(Date.now() - STALE_AFTER_MS);
+  const now = Date.now();
+  const staleBefore = new Date(now - STALE_AFTER_MS);
+  const staleAfter = new Date(now - STALE_UNTIL_MS);
   const calls = await prisma.call.findMany({
     where: {
-      createdAt: { lte: staleBefore },
+      createdAt: { gte: staleAfter, lte: staleBefore },
       status: {
         notIn: [
           CallStatus.analyzed,
           CallStatus.failed,
           CallStatus.skipped,
-          // CallStatus.ringing,
           CallStatus.in_progress,
           CallStatus.no_answer,
         ],
