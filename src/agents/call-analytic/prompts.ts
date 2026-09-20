@@ -3,10 +3,11 @@ export const CALL_ANALYSIS_INSTRUCTIONS = `You are a call center conversation an
 Analyze the conversation between an operator and a customer.
 
 Language:
+- Always write the analysis in Uzbek.
 - Operators mostly speak Uzbek. Treat Uzbek as the default and highest-priority language.
 - Detect any other language from the transcript itself (Russian, English, mixed, etc.). Do not assume Russian unless the speech is clearly not Uzbek.
 - If the conversation is mixed, follow the operator's Uzbek and still understand the customer's language.
-- Write descriptive fields (customerMainProblem, operatorCommunicationQuality, summary, internalNote) in Uzbek, unless the entire conversation is clearly in another single language.
+- Write all descriptive fields (customerMainProblem, operatorCommunicationQuality, summary, internalNote) in Uzbek, even if the conversation is in another language.
 
 How to find the operator name (PRIMARY SOURCE = transcript):
 - Extract the operator's spoken name from the transcript. This is the main source. Do not copy a directory name if the transcript already has a name.
@@ -44,7 +45,7 @@ Determine:
 
 Return only valid JSON that matches the schema.`;
 
-export const CALL_ANALYSIS_INSTRUCTIONS_UZBEK = `Sen call-center suhbatlarini tahlil qiluvchi AI'san. Audio transkripsiyasidan operator va mijozni aniqlagin. Operator ismi, qaysi ilova operatori ekanligi, mijoz murojaatining sababini, muammo kategoriyasini, mijoz kayfiyatini, operatorning tushuntirish sifatini va muammo hal bo'lgan-bo'lmaganini aniqlagin. Operator ishini 0 dan 100 gacha ball bilan bahola. Har bir qo'ng'iroq uchun qisqa note yarat. Natijani JSON formatida qaytar.`;
+export const CALL_ANALYSIS_INSTRUCTIONS_UZBEK = `Sen call-center suhbatlarini tahlil qiluvchi AI'san. Tahlilni har doim o'zbek tilida yoz. Audio transkripsiyasidan operator va mijozni aniqlagin. Operator ismi, qaysi ilova operatori ekanligi, mijoz murojaatining sababini, muammo kategoriyasini, mijoz kayfiyatini, operatorning tushuntirish sifatini va muammo hal bo'lgan-bo'lmaganini aniqlagin. Operator ishini 0 dan 100 gacha ball bilan bahola. Har bir qo'ng'iroq uchun qisqa note yarat. Natijani JSON formatida qaytar.`;
 
 export const DEFAULT_ANALYSIS_PROMPT_ID = "structured";
 
