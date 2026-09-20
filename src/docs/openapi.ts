@@ -12,6 +12,7 @@ export const openApiSpec = {
   tags: [
     { name: "Health" },
     { name: "Agents" },
+    { name: "Ask" },
     { name: "Apps" },
     { name: "Operators" },
     { name: "Webhooks" },
@@ -50,6 +51,47 @@ export const openApiSpec = {
         summary: "List custom agents and their tasks",
         responses: {
           "200": { description: "Agent catalog" },
+        },
+      },
+    },
+    "/ask": {
+      post: {
+        tags: ["Ask"],
+        summary: "Send a question; the answer is posted to your webhook",
+        description:
+          "Returns success immediately. The model answer is POSTed later to webhookUrl as JSON: { requestId, question, success, answer }.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["question", "webhookUrl"],
+                properties: {
+                  question: { type: "string", example: "Bugun nechta odamda to'lov muammosi bo'ldi?" },
+                  webhookUrl: { type: "string", example: "https://example.com/hooks/ask" },
+                  requestId: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "202": {
+            description: "Accepted",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean" },
+                    accepted: { type: "boolean" },
+                    requestId: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },

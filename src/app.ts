@@ -6,6 +6,7 @@ import { minioStatus } from "./lib/minio";
 import { prisma } from "./lib/prisma";
 import { appsRouter } from "./routes/apps";
 import { agentsRouter } from "./routes/agents";
+import { askRouter } from "./routes/ask";
 import { callsRouter } from "./routes/calls";
 import { operatorsRouter } from "./routes/operators";
 import { reportsRouter } from "./routes/reports";
@@ -63,6 +64,7 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/agents", agentsRouter);
+app.use("/ask", askRouter);
 app.use("/apps", appsRouter);
 app.use("/operators", operatorsRouter);
 app.use("/webhooks", webhookRouter);

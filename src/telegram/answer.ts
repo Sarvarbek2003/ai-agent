@@ -94,7 +94,7 @@ function parseJson(raw: string): Record<string, unknown> {
   }
 }
 
-export async function answerTelegramQuestion(question: string): Promise<string> {
+export async function answerQuestion(question: string): Promise<string> {
   const openai = getOpenAI();
   let usedSql = false;
   let response = await openai.responses.create({

@@ -1,6 +1,6 @@
 import { config } from "../config";
 import { sleep } from "../lib/dates";
-import { answerTelegramQuestion } from "./answer";
+import { answerQuestion } from "./answer";
 
 type TelegramUpdate = {
   update_id: number;
@@ -63,7 +63,7 @@ async function handleMessage(update: TelegramUpdate): Promise<void> {
 
   await telegram("sendChatAction", { chat_id: message.chat.id, action: "typing" });
   try {
-    const answer = await answerTelegramQuestion(text);
+    const answer = await answerQuestion(text);
     await telegram("sendMessage", {
       chat_id: message.chat.id,
       text: answer.slice(0, 4000),
