@@ -11,7 +11,7 @@ appsRouter.get(
   asyncHandler(async (req, res) => {
     const apps = await prisma.app.findMany({
       include: {
-        _count: { select: { operators: true } },
+        _count: { select: { operators: true, dnids: true } },
         operators: String(req.query.includeOperators) === "true"
           ? { orderBy: { code: "asc" } }
           : false,
