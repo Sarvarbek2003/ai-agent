@@ -3,8 +3,8 @@ import { parseJsonText } from "../../lib/openai";
 import { getActiveAnalysisPrompt } from "../../lib/settings";
 import { getActiveScoringAgent } from "../../lib/scoring-agents";
 import {
-  openaiAgentIdForCall,
-  runOpenAIAgentSession,
+  dailySessionInstructions,
+  runDailyOpenAIAgentSession,
   syncOpenAIScoringAgent,
 } from "../../lib/openai-agents";
 import { OperatorWithApp } from "../../lib/operators";
@@ -43,14 +43,14 @@ export async function analyzeTranscript(
   const operator = options?.operator ?? null;
   const prompt = await getActiveAnalysisPrompt();
   const scoringAgent = await getActiveScoringAgent();
-  const direction = call.direction === "outbound" ? "outbound" : "inbound";
   const readyAgent =
     scoringAgent && (!scoringAgent.openaiInboundAgentId || !scoringAgent.openaiOutboundAgentId)
       ? await syncOpenAIScoringAgent(scoringAgent)
       : scoringAgent;
-  const agentId = readyAgent ? openaiAgentIdForCall(readyAgent, direction) : undefined;
+  const agentId = readyAgent?.openaiInboundAgentId || readyAgent?.openaiOutboundAgentId || undefined;
 
   const input = JSON.stringify({
+    type: "new_call",
     vpbxId: call.vpbxId,
     direction: call.direction,
     firstAnswer: call.firstAnswer,
@@ -59,9 +59,15 @@ export async function analyzeTranscript(
     transcript: formatTranscript(transcript),
   });
 
-  const session = await runOpenAIAgentSession({
-    agentId: agentId ?? undefined,
-    instructions: agentId ? undefined : prompt.instructions,
+  const session = await runDailyOpenAIAgentSession({
+    localDate: call.endedAt ?? call.createdAt,
+    agentId,
+    instructions: dailySessionInstructions({
+      name: readyAgent?.name,
+      prompt: prompt.instructions,
+      inboundCriteria: readyAgent?.inboundCriteriaText,
+      outboundCriteria: readyAgent?.outboundCriteriaText,
+    }),
     input,
   });
 

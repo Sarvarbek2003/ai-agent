@@ -145,6 +145,7 @@ model DailyThread {
   localDate            String         @unique
   timezone             String
   openaiConversationId String         @unique
+  openaiAgentSessionId String?        @unique
   promptVersion        Int            @default(0)
   lastResponseId       String?
   reportJson           Json?
