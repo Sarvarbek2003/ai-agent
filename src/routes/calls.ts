@@ -63,7 +63,7 @@ callsRouter.get(
       prisma.call.findMany({
         where,
         include: {
-          analysis: true,
+          analysis: { include: { scoringAgent: { select: { id: true, name: true, slug: true } } } },
           transcript: { select: { id: true, durationSec: true } },
           operator: { include: { app: true } },
           app: true,
@@ -96,7 +96,7 @@ callsRouter.get(
       include: {
         events: { orderBy: { receivedAt: "asc" } },
         transcript: true,
-        analysis: true,
+        analysis: { include: { scoringAgent: { select: { id: true, name: true, slug: true } } } },
         operator: { include: { app: true } },
         app: true,
       },

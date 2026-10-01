@@ -6,6 +6,8 @@ import {
   listAnalysisPrompts,
   setActiveAnalysisPrompt,
 } from "../lib/settings";
+import { prisma } from "../lib/prisma";
+import { serializeScoringAgent } from "../lib/scoring-agents";
 
 export const settingsRouter = Router();
 
@@ -13,10 +15,13 @@ settingsRouter.get(
   "/",
   asyncHandler(async (_req, res) => {
     const settings = await getAppSettings();
+    const scoringAgents = await prisma.scoringAgent.findMany({ orderBy: { createdAt: "desc" } });
     res.json({
       activeAnalysisPromptId: settings.activeAnalysisPromptId,
       updatedAt: settings.updatedAt,
       prompts: listAnalysisPrompts(),
+      scoringAgents: scoringAgents.map((item) => serializeScoringAgent(item)),
+      activeScoringAgentId: scoringAgents.find((item) => item.isActive)?.id ?? null,
     });
   }),
 );

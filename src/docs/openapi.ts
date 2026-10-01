@@ -439,6 +439,63 @@ export const openApiSpec = {
         responses: { "200": { description: "Updated settings" } },
       },
     },
+    "/settings/agents": {
+      get: {
+        tags: ["Settings"],
+        summary: "List scoring agents",
+        responses: { "200": { description: "Scoring agents" } },
+      },
+      post: {
+        tags: ["Settings"],
+        summary: "Create a scoring agent with inbound and outbound .docx criteria",
+        requestBody: {
+          required: true,
+          content: {
+            "multipart/form-data": {
+              schema: {
+                type: "object",
+                required: ["name", "inboundCriteria", "outboundCriteria"],
+                properties: {
+                  name: { type: "string" },
+                  isActive: { type: "string", example: "true" },
+                  inboundCriteria: { type: "string", format: "binary" },
+                  outboundCriteria: { type: "string", format: "binary" },
+                },
+              },
+            },
+          },
+        },
+        responses: { "201": { description: "Agent created" } },
+      },
+    },
+    "/settings/agents/{id}": {
+      get: {
+        tags: ["Settings"],
+        summary: "Get a scoring agent",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Agent" } },
+      },
+      patch: {
+        tags: ["Settings"],
+        summary: "Update name or replace a .docx criteria file",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Updated agent" } },
+      },
+      delete: {
+        tags: ["Settings"],
+        summary: "Delete a scoring agent",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "204": { description: "Deleted" } },
+      },
+    },
+    "/settings/agents/{id}/activate": {
+      post: {
+        tags: ["Settings"],
+        summary: "Make this scoring agent active for call analysis",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { "200": { description: "Activated agent" } },
+      },
+    },
   },
   components: {
     schemas: {

@@ -2,6 +2,7 @@ import { Call, Transcript } from "@prisma/client";
 import { config } from "../../config";
 import { extractOutputText, getOpenAI, parseJsonText } from "../../lib/openai";
 import { getActiveAnalysisPrompt } from "../../lib/settings";
+import { criteriaForCall, getActiveScoringAgent } from "../../lib/scoring-agents";
 import { AppHint, matchKnownAppName } from "../../lib/slug";
 import {
   CallAnalysisResult,
@@ -39,14 +40,26 @@ export async function analyzeTranscript(
   result: CallAnalysisResult;
   responseId?: string;
   promptId: string;
+  scoringAgentId?: string;
 }> {
   const openai = getOpenAI();
   const apps = options?.apps ?? [];
   const prompt = await getActiveAnalysisPrompt();
+  const scoringAgent = await getActiveScoringAgent();
+  const direction = call.direction === "outbound" ? "outbound" : "inbound";
+  const scoringCriteria = scoringAgent ? criteriaForCall(scoringAgent, call.direction) : "";
+
+  const instructions = scoringCriteria
+    ? `${prompt.instructions}
+
+Operator scoring criteria for ${direction} calls (from the uploaded .docx). Score from 0 to 100 strictly by these criteria. Write the analysis in Uzbek.
+
+${scoringCriteria}`
+    : prompt.instructions;
 
   const response = await openai.responses.create({
     model: config.analysisModel,
-    instructions: prompt.instructions,
+    instructions,
     input: [
       {
         role: "user",
@@ -90,5 +103,6 @@ export async function analyzeTranscript(
     result,
     responseId: response.id,
     promptId: prompt.id,
+    scoringAgentId: scoringAgent?.id,
   };
 }
