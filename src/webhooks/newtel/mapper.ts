@@ -9,6 +9,7 @@ export type CallPatch = {
   customerNumber?: string;
   operatorNumber?: string;
   operatorId?: string;
+  appId?: string;
   dnid?: string;
   clid?: string;
   firstAnswer?: string;

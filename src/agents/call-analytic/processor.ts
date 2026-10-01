@@ -1,7 +1,6 @@
 import { Call, CallStatus, Prisma, Transcript } from "@prisma/client";
 import { config } from "../../config";
 import { collectOperatorCodes, findOperatorByCodes, OperatorWithApp } from "../../lib/operators";
-import { matchKnownAppName } from "../../lib/slug";
 import { prisma } from "../../lib/prisma";
 import { analyzeTranscript } from "./analyze";
 import { appendCallToDailyThread } from "./daily-thread";
@@ -11,6 +10,7 @@ import { transcribeCallRecording } from "./transcribe";
 type LoadedCall = Call & {
   transcript: Transcript | null;
   operator: OperatorWithApp | null;
+  app: { id: string; name: string; slug: string } | null;
 };
 
 export async function processCall(
@@ -19,7 +19,7 @@ export async function processCall(
 ): Promise<void> {
   const call = await prisma.call.findUnique({
     where: { id: callId },
-    include: { transcript: true, analysis: true, operator: { include: { app: true } } },
+    include: { transcript: true, analysis: true, operator: { include: { app: true } }, app: true },
   });
 
   if (!call) {
@@ -126,14 +126,13 @@ async function analyzeSavedTranscript(call: LoadedCall, transcript: Transcript):
     call.operatorId = operator.id;
     call.operatorNumber = operator.code;
   }
-
-  const apps = await prisma.app.findMany({
-    select: { id: true, name: true, slug: true },
-    orderBy: { name: "asc" },
-  });
+  if (operator) {
+    call.operator = operator;
+  }
 
   const { result, responseId, promptId, scoringAgentId } = await analyzeTranscript(call, transcript, {
-    apps,
+    operator,
+    appName: call.app?.name ?? operator?.app.name,
   });
   const analysis = await prisma.callAnalysis.upsert({
     where: { callId: call.id },
@@ -156,11 +155,10 @@ async function analyzeSavedTranscript(call: LoadedCall, transcript: Transcript):
     },
   });
 
-  const matchedApp = matchKnownAppName(result.appName, apps);
-  if (matchedApp) {
+  if (!call.appId && operator) {
     await prisma.call.update({
       where: { id: call.id },
-      data: { appId: matchedApp.id },
+      data: { appId: operator.appId },
     });
   }
 

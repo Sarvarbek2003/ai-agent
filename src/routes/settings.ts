@@ -15,13 +15,19 @@ settingsRouter.get(
   "/",
   asyncHandler(async (_req, res) => {
     const settings = await getAppSettings();
-    const scoringAgents = await prisma.scoringAgent.findMany({ orderBy: { createdAt: "desc" } });
+    const [scoringAgents, dnids, operators] = await Promise.all([
+      prisma.scoringAgent.findMany({ orderBy: { createdAt: "desc" } }),
+      prisma.appDnid.findMany({ include: { app: true }, orderBy: { phone: "asc" } }),
+      prisma.operator.findMany({ include: { app: true }, orderBy: [{ app: { name: "asc" } }, { code: "asc" }] }),
+    ]);
     res.json({
       activeAnalysisPromptId: settings.activeAnalysisPromptId,
       updatedAt: settings.updatedAt,
       prompts: listAnalysisPrompts(),
       scoringAgents: scoringAgents.map((item) => serializeScoringAgent(item)),
       activeScoringAgentId: scoringAgents.find((item) => item.isActive)?.id ?? null,
+      dnids,
+      operators,
     });
   }),
 );

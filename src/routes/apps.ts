@@ -112,6 +112,10 @@ appsRouter.delete(
     if (existing._count.operators > 0) {
       throw new HttpError(409, "Delete operators of this app first");
     }
+    const dnidCount = await prisma.appDnid.count({ where: { appId: existing.id } });
+    if (dnidCount > 0) {
+      throw new HttpError(409, "Delete DNID mappings of this app first");
+    }
     await prisma.app.delete({ where: { id: existing.id } });
     res.status(204).send();
   }),

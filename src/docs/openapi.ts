@@ -496,6 +496,40 @@ export const openApiSpec = {
         responses: { "200": { description: "Activated agent" } },
       },
     },
+    "/settings/dnids": {
+      get: {
+        tags: ["Settings"],
+        summary: "List webhook DNID phone numbers and their apps",
+        responses: { "200": { description: "DNID mappings" } },
+      },
+      post: {
+        tags: ["Settings"],
+        summary: "Map a webhook dnid phone number to an app",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["phone", "appId"],
+                properties: {
+                  phone: { type: "string", example: "712007070" },
+                  appId: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        responses: { "201": { description: "Created" } },
+      },
+    },
+    "/settings/operators": {
+      get: {
+        tags: ["Settings"],
+        summary: "List operator codes used from webhook firstAnswer",
+        responses: { "200": { description: "Operators" } },
+      },
+    },
   },
   components: {
     schemas: {

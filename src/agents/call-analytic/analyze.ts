@@ -3,7 +3,7 @@ import { config } from "../../config";
 import { extractOutputText, getOpenAI, parseJsonText } from "../../lib/openai";
 import { getActiveAnalysisPrompt } from "../../lib/settings";
 import { criteriaForCall, getActiveScoringAgent } from "../../lib/scoring-agents";
-import { AppHint, matchKnownAppName } from "../../lib/slug";
+import { OperatorWithApp } from "../../lib/operators";
 import {
   CallAnalysisResult,
   callAnalysisJsonSchema,
@@ -25,16 +25,12 @@ function formatTranscript(transcript: Transcript): string {
     .join("\n");
 }
 
-function fallbackText(value: string | undefined, fallback = "unknown"): string {
-  const text = value?.trim();
-  return text ? text : fallback;
-}
-
 export async function analyzeTranscript(
   call: Call,
   transcript: Transcript,
   options?: {
-    apps?: AppHint[];
+    operator?: OperatorWithApp | null;
+    appName?: string | null;
   },
 ): Promise<{
   result: CallAnalysisResult;
@@ -43,7 +39,7 @@ export async function analyzeTranscript(
   scoringAgentId?: string;
 }> {
   const openai = getOpenAI();
-  const apps = options?.apps ?? [];
+  const operator = options?.operator ?? null;
   const prompt = await getActiveAnalysisPrompt();
   const scoringAgent = await getActiveScoringAgent();
   const direction = call.direction === "outbound" ? "outbound" : "inbound";
@@ -89,15 +85,9 @@ ${scoringCriteria}`
   });
 
   const result = parseJsonText<CallAnalysisResult>(extractOutputText(response));
-  const detectedAppName = fallbackText(result.appName);
-  const matchedApp = matchKnownAppName(detectedAppName, apps);
-
-  result.operatorName = fallbackText(result.operatorName);
-  result.operatorCode = fallbackText(
-    result.operatorCode !== "unknown" ? result.operatorCode : undefined,
-    call.firstAnswer || call.operatorNumber || "unknown",
-  );
-  result.appName = matchedApp?.name ?? detectedAppName;
+  result.operatorName = operator?.name || "unknown";
+  result.operatorCode = operator?.code || call.firstAnswer || call.operatorNumber || "unknown";
+  result.appName = options?.appName || operator?.app.name || "unknown";
 
   return {
     result,

@@ -2,6 +2,7 @@ import { prisma } from "../../lib/prisma";
 import { config, webhookUrl } from "../../config";
 import { verifyNewtelSignature } from "../../lib/newtel-signature";
 import { collectOperatorCodes, findOperatorByCodes } from "../../lib/operators";
+import { findAppByDnids } from "../../lib/dnid";
 import { enqueueUnique } from "../../lib/queue";
 import { processCall } from "../../agents/call-analytic/processor";
 import { mapEventToCallPatch, shouldAnalyzeCall } from "./mapper";
@@ -91,6 +92,18 @@ export async function ingestNewtelWebhook(body: unknown) {
     patch.operatorNumber = operator.code;
   }
 
+  const app = await findAppByDnids([
+    patch.dnid,
+    data.dnid,
+    data.clid,
+    data.externalClid,
+  ]);
+  if (app) {
+    patch.appId = app.id;
+  } else if (operator && !patch.appId) {
+    patch.appId = operator.appId;
+  }
+
   const call = await prisma.call.upsert({
     where: { vpbxId },
     create: {
@@ -124,5 +137,6 @@ export async function ingestNewtelWebhook(body: unknown) {
       ? { id: operator.id, name: operator.name, code: operator.code, app: operator.app.name }
       : null,
     webhookUrl: webhookUrl(),
+    app: app ? { id: app.id, name: app.name, slug: app.slug } : null,
   };
 }
