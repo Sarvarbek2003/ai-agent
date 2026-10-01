@@ -1,13 +1,14 @@
 import { Call, Transcript } from "@prisma/client";
-import { config } from "../../config";
-import { extractOutputText, getOpenAI, parseJsonText } from "../../lib/openai";
+import { parseJsonText } from "../../lib/openai";
 import { getActiveAnalysisPrompt } from "../../lib/settings";
-import { criteriaForCall, getActiveScoringAgent } from "../../lib/scoring-agents";
-import { OperatorWithApp } from "../../lib/operators";
+import { getActiveScoringAgent } from "../../lib/scoring-agents";
 import {
-  CallAnalysisResult,
-  callAnalysisJsonSchema,
-} from "./prompts";
+  openaiAgentIdForCall,
+  runOpenAIAgentSession,
+  syncOpenAIScoringAgent,
+} from "../../lib/openai-agents";
+import { OperatorWithApp } from "../../lib/operators";
+import { CallAnalysisResult } from "./prompts";
 
 function formatTranscript(transcript: Transcript): string {
   const segments = Array.isArray(transcript.segments) ? transcript.segments : [];
@@ -37,62 +38,43 @@ export async function analyzeTranscript(
   responseId?: string;
   promptId: string;
   scoringAgentId?: string;
+  model: string;
 }> {
-  const openai = getOpenAI();
   const operator = options?.operator ?? null;
   const prompt = await getActiveAnalysisPrompt();
   const scoringAgent = await getActiveScoringAgent();
   const direction = call.direction === "outbound" ? "outbound" : "inbound";
-  const scoringCriteria = scoringAgent ? criteriaForCall(scoringAgent, call.direction) : "";
+  const readyAgent =
+    scoringAgent && (!scoringAgent.openaiInboundAgentId || !scoringAgent.openaiOutboundAgentId)
+      ? await syncOpenAIScoringAgent(scoringAgent)
+      : scoringAgent;
+  const agentId = readyAgent ? openaiAgentIdForCall(readyAgent, direction) : undefined;
 
-  const instructions = scoringCriteria
-    ? `${prompt.instructions}
-
-Operator scoring criteria for ${direction} calls (from the uploaded .docx). Score from 0 to 100 strictly by these criteria. Write the analysis in Uzbek.
-
-${scoringCriteria}`
-    : prompt.instructions;
-
-  const response = await openai.responses.create({
-    model: config.analysisModel,
-    instructions,
-    input: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "input_text",
-            text: JSON.stringify({
-              vpbxId: call.vpbxId,
-              direction: call.direction,
-              firstAnswer: call.firstAnswer,
-              operatorNumber: call.operatorNumber,
-              durationSec: call.durationSec,
-              transcript: formatTranscript(transcript),
-            }),
-          },
-        ],
-      },
-    ],
-    text: {
-      format: {
-        type: "json_schema",
-        name: "call_analysis",
-        strict: true,
-        schema: callAnalysisJsonSchema,
-      },
-    },
+  const input = JSON.stringify({
+    vpbxId: call.vpbxId,
+    direction: call.direction,
+    firstAnswer: call.firstAnswer,
+    operatorNumber: call.operatorNumber,
+    durationSec: call.durationSec,
+    transcript: formatTranscript(transcript),
   });
 
-  const result = parseJsonText<CallAnalysisResult>(extractOutputText(response));
+  const session = await runOpenAIAgentSession({
+    agentId: agentId ?? undefined,
+    instructions: agentId ? undefined : prompt.instructions,
+    input,
+  });
+
+  const result = parseJsonText<CallAnalysisResult>(session.text);
   result.operatorName = operator?.name || "unknown";
   result.operatorCode = operator?.code || call.firstAnswer || call.operatorNumber || "unknown";
   result.appName = options?.appName || operator?.app.name || "unknown";
 
   return {
     result,
-    responseId: response.id,
+    responseId: session.sessionId,
     promptId: prompt.id,
-    scoringAgentId: scoringAgent?.id,
+    scoringAgentId: readyAgent?.id,
+    model: session.model,
   };
 }

@@ -17,6 +17,7 @@ export const config = {
   databaseUrl: requiredInProduction("DATABASE_URL"),
   openaiApiKey: optional("OPENAI_API_KEY"),
   analysisModel: optional("OPENAI_ANALYSIS_MODEL", "gpt-4o"),
+  agentModel: optional("OPENAI_AGENT_MODEL", "gpt-6-luna"),
   transcribeModel: "gpt-transcribe",
   newtelWebhookKey: optional("NEWTEL_WEBHOOK_KEY"),
   publicBaseUrl: optional("PUBLIC_BASE_URL", "http://localhost:5050").replace(/\/$/, ""),

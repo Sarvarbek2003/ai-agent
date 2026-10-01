@@ -39,5 +39,14 @@ export function parseJsonText<T>(text: string): T {
   const trimmed = text.trim();
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
   const raw = fenced?.[1]?.trim() ?? trimmed;
-  return JSON.parse(raw) as T;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(raw.slice(start, end + 1)) as T;
+    }
+    throw new Error("OpenAI agent did not return valid JSON");
+  }
 }

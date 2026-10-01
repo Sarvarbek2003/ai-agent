@@ -130,7 +130,7 @@ async function analyzeSavedTranscript(call: LoadedCall, transcript: Transcript):
     call.operator = operator;
   }
 
-  const { result, responseId, promptId, scoringAgentId } = await analyzeTranscript(call, transcript, {
+  const { result, responseId, promptId, scoringAgentId, model } = await analyzeTranscript(call, transcript, {
     operator,
     appName: call.app?.name ?? operator?.app.name,
   });
@@ -138,7 +138,7 @@ async function analyzeSavedTranscript(call: LoadedCall, transcript: Transcript):
     where: { callId: call.id },
     create: {
       callId: call.id,
-      model: config.analysisModel,
+      model,
       openaiResponseId: responseId,
       analysisPromptId: promptId,
       scoringAgentId,
@@ -146,7 +146,7 @@ async function analyzeSavedTranscript(call: LoadedCall, transcript: Transcript):
       ...result,
     },
     update: {
-      model: config.analysisModel,
+      model,
       openaiResponseId: responseId,
       analysisPromptId: promptId,
       scoringAgentId,

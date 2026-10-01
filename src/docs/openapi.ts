@@ -448,6 +448,8 @@ export const openApiSpec = {
       post: {
         tags: ["Settings"],
         summary: "Create a scoring agent with inbound and outbound .docx criteria",
+        description:
+          "Creates reusable OpenAI gpt-6-luna agents at POST /v1/agents for inbound and outbound scoring. Analysis runs in an Agents API session without sandbox, tools, or subagents.",
         requestBody: {
           required: true,
           content: {

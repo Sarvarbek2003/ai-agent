@@ -10,6 +10,11 @@ import {
   setActiveScoringAgent,
   uniqueAgentSlug,
 } from "../lib/scoring-agents";
+import {
+  deleteOpenAIScoringAgent,
+  openaiAgentErrorMessage,
+  syncOpenAIScoringAgent,
+} from "../lib/openai-agents";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -102,7 +107,15 @@ scoringAgentsRouter.post(
       },
     });
 
-    const saved = makeActive ? await setActiveScoringAgent(withFiles.id) : withFiles;
+    let synced;
+    try {
+      synced = await syncOpenAIScoringAgent(withFiles);
+    } catch (error) {
+      await prisma.scoringAgent.delete({ where: { id: withFiles.id } }).catch(() => undefined);
+      throw new HttpError(502, openaiAgentErrorMessage(error));
+    }
+
+    const saved = makeActive ? await setActiveScoringAgent(synced.id) : synced;
     res.status(201).json(serializeScoringAgent(saved, { includeText: true }));
   }),
 );
@@ -168,8 +181,14 @@ scoringAgentsRouter.patch(
       where: { id: existing.id },
       data,
     });
+    let synced;
+    try {
+      synced = await syncOpenAIScoringAgent(updated);
+    } catch (error) {
+      throw new HttpError(502, openaiAgentErrorMessage(error));
+    }
     const saved =
-      String(req.body?.isActive ?? "") === "true" ? await setActiveScoringAgent(updated.id) : updated;
+      String(req.body?.isActive ?? "") === "true" ? await setActiveScoringAgent(synced.id) : synced;
     res.json(serializeScoringAgent(saved, { includeText: true }));
   }),
 );
@@ -184,7 +203,13 @@ scoringAgentsRouter.post(
     if (!existing) {
       throw new HttpError(404, "Agent not found");
     }
-    const saved = await setActiveScoringAgent(existing.id);
+    let synced = existing;
+    try {
+      synced = await syncOpenAIScoringAgent(existing);
+    } catch (error) {
+      throw new HttpError(502, openaiAgentErrorMessage(error));
+    }
+    const saved = await setActiveScoringAgent(synced.id);
     res.json(serializeScoringAgent(saved));
   }),
 );
@@ -199,6 +224,7 @@ scoringAgentsRouter.delete(
     if (!existing) {
       throw new HttpError(404, "Agent not found");
     }
+    await deleteOpenAIScoringAgent(existing);
     await prisma.scoringAgent.delete({ where: { id: existing.id } });
     res.status(204).end();
   }),

@@ -165,6 +165,8 @@ model ScoringAgent {
   outboundCriteriaFileName   String
   outboundCriteriaText       String
   outboundCriteriaObjectKey  String?
+  openaiInboundAgentId       String?
+  openaiOutboundAgentId      String?
   analyses                   CallAnalysis[]
   createdAt                  DateTime       @default(now())
   updatedAt                  DateTime       @updatedAt
