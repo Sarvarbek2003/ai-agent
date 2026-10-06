@@ -1,14 +1,11 @@
 import { Call, Transcript } from "@prisma/client";
+import { config } from "../../config";
 import { parseJsonText } from "../../lib/openai";
 import { getActiveAnalysisPrompt } from "../../lib/settings";
 import { getActiveScoringAgent } from "../../lib/scoring-agents";
-import {
-  dailySessionInstructions,
-  runDailyOpenAIAgentSession,
-  syncOpenAIScoringAgent,
-} from "../../lib/openai-agents";
+import { runDailyOpenAIAgentSession } from "../../lib/openai-agents";
 import { OperatorWithApp } from "../../lib/operators";
-import { CallAnalysisResult } from "./prompts";
+import { isScoringAnalysis, normalizeCallAnalysis, CallAnalysisResult } from "./prompts";
 
 function formatTranscript(transcript: Transcript): string {
   const segments = Array.isArray(transcript.segments) ? transcript.segments : [];
@@ -35,24 +32,27 @@ export async function analyzeTranscript(
   },
 ): Promise<{
   result: CallAnalysisResult;
+  raw: Record<string, unknown>;
   responseId?: string;
   promptId: string;
   scoringAgentId?: string;
   model: string;
 }> {
+  if (!config.openaiAgentId) {
+    throw new Error("OPENAI_AGENT_ID is not configured");
+  }
+
   const operator = options?.operator ?? null;
   const prompt = await getActiveAnalysisPrompt();
   const scoringAgent = await getActiveScoringAgent();
-  const readyAgent =
-    scoringAgent && (!scoringAgent.openaiInboundAgentId || !scoringAgent.openaiOutboundAgentId)
-      ? await syncOpenAIScoringAgent(scoringAgent)
-      : scoringAgent;
-  const agentId = readyAgent?.openaiInboundAgentId || readyAgent?.openaiOutboundAgentId || undefined;
+  const direction = call.direction === "outbound" ? "outbound" : "inbound";
+  const scoringFile = direction === "outbound" ? "Chiqish.docx" : "Kirish.docx";
 
   const input = JSON.stringify({
     type: "new_call",
     vpbxId: call.vpbxId,
     direction: call.direction,
+    scoringFile,
     firstAnswer: call.firstAnswer,
     operatorNumber: call.operatorNumber,
     durationSec: call.durationSec,
@@ -61,26 +61,27 @@ export async function analyzeTranscript(
 
   const session = await runDailyOpenAIAgentSession({
     localDate: call.endedAt ?? call.createdAt,
-    agentId,
-    instructions: dailySessionInstructions({
-      name: readyAgent?.name,
-      prompt: prompt.instructions,
-      inboundCriteria: readyAgent?.inboundCriteriaText,
-      outboundCriteria: readyAgent?.outboundCriteriaText,
-    }),
+    agentId: config.openaiAgentId,
     input,
   });
 
-  const result = parseJsonText<CallAnalysisResult>(session.text);
-  result.operatorName = operator?.name || "unknown";
-  result.operatorCode = operator?.code || call.firstAnswer || call.operatorNumber || "unknown";
-  result.appName = options?.appName || operator?.app.name || "unknown";
+  const parsed = parseJsonText<Record<string, unknown>>(session.text);
+  if (!isScoringAnalysis(parsed)) {
+    throw new Error("OpenAI agent returned an unexpected scoring JSON");
+  }
+
+  const result = normalizeCallAnalysis(parsed, {
+    operatorName: operator?.name || "unknown",
+    operatorCode: operator?.code || call.firstAnswer || call.operatorNumber || "unknown",
+    appName: options?.appName || operator?.app.name || "unknown",
+  });
 
   return {
     result,
+    raw: parsed,
     responseId: session.sessionId,
     promptId: prompt.id,
-    scoringAgentId: readyAgent?.id,
+    scoringAgentId: scoringAgent?.id,
     model: session.model,
   };
 }

@@ -9,12 +9,10 @@ Answer only from tool results. Never invent counts, names, or outcomes.
 If a tool returns 0, say 0. If there is no matching data, say so clearly.
 Use Asia/Tashkent dates. "bugun" = today's local date.
 
-Payment / to'lov / pul / karta / billing problems → problemCategory=billing. You may also pass search="to'lov".
-Technical / texnik → technical.
-Complaint / shikoyat → complaint.
+Search title and overallComment for keywords such as to'lov, texnik, shikoyat.
 
 Tool choice:
-1. First try query_call_analytics for ordinary stats (counts by day, app, category, operator, resolved).
+1. First try query_call_analytics for ordinary stats (counts by day, app, operator, average score/percentage).
 2. If that tool cannot answer — custom join, raw text in transcript, mutation, unusual filter, exact SQL needed — call run_sql.
 3. If you need SQL, call get_database_schema first, then run_sql.
 4. run_sql has full access: SELECT, INSERT, UPDATE, DELETE.
@@ -40,16 +38,7 @@ const ANALYTICS_TOOL = {
       appName: { type: "string", description: "App/product filter: MilliyPay, AnjirPay, Migsend, etc." },
       operatorName: { type: "string" },
       operatorCode: { type: "string", description: "Extension code, e.g. 103" },
-      problemCategory: {
-        type: "string",
-        enum: ["billing", "technical", "complaint", "information", "sales", "connection", "other", "unknown"],
-      },
-      problemResolved: { type: "string", enum: ["yes", "no", "partial", "unknown"] },
-      customerEmotionalState: {
-        type: "string",
-        enum: ["calm", "confused", "frustrated", "angry", "satisfied", "unknown"],
-      },
-      search: { type: "string", description: "Search problem/summary text, e.g. to'lov, SMS, karta" },
+      search: { type: "string", description: "Search title/comment text, e.g. to'lov, SMS, karta" },
     },
     required: [],
   },

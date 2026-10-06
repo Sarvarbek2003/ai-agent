@@ -5,7 +5,7 @@ import { callAnalysisJsonSchema } from "../agents/call-analytic/prompts";
 import { getOrCreateDailyThread } from "../agents/call-analytic/daily-thread";
 import { getActiveAnalysisPrompt } from "./settings";
 import { prisma } from "./prisma";
-import { getOpenAI } from "./openai";
+import { getOpenAI, parseJsonText } from "./openai";
 import { sleep } from "./dates";
 
 const AGENT_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
@@ -229,14 +229,18 @@ async function readSessionOutput(sessionId: string): Promise<string> {
 export async function runDailyOpenAIAgentSession(params: {
   localDate: Date | string;
   agentId?: string;
-  instructions: string;
+  instructions?: string;
   input: string;
 }): Promise<{ sessionId: string; text: string; model: string }> {
   return withDailySessionLock(async () => {
     const thread = await getOrCreateDailyThread(params.localDate);
     if (thread.openaiAgentSessionId) {
       try {
-        return await continueAgentSession(thread.openaiAgentSessionId, params.input);
+        const continued = await continueAgentSession(thread.openaiAgentSessionId, params.input);
+        if (scoringOutputLooksValid(continued.text)) {
+          return continued;
+        }
+        console.error("Daily OpenAI agent session returned old scoring shape; opening a new one");
       } catch (error) {
         console.error("Daily OpenAI agent session failed; opening a new one", error);
       }
@@ -344,10 +348,12 @@ async function createAgentSession(params: {
     environment: { type: "none" },
     input: params.input,
     stream: true,
-    agent: lunaAgentConfig(params.instructions),
   };
+
   if (params.agentId) {
     request.agent_id = params.agentId;
+  } else {
+    request.agent = lunaAgentConfig(params.instructions);
   }
 
   const events = await openai.beta.agents.sessions.create(request, { timeout: AGENT_REQUEST_TIMEOUT_MS });
@@ -366,6 +372,15 @@ async function continueAgentSession(
     { timeout: AGENT_REQUEST_TIMEOUT_MS },
   );
   return collectTurnOutput(events, () => events.abort(), sessionId);
+}
+
+function scoringOutputLooksValid(text: string): boolean {
+  try {
+    const parsed = parseJsonText<Record<string, unknown>>(text);
+    return typeof parsed.title === "string" && Array.isArray(parsed.criteria);
+  } catch {
+    return false;
+  }
 }
 
 function pickJsonOutput(outputs: string[]): string {

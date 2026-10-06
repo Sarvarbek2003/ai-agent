@@ -76,10 +76,13 @@ export async function appendCallToDailyThread(params: {
               operatorName: params.analysis.operatorName,
               operatorCode: params.analysis.operatorCode,
               appName: params.analysis.appName,
-              problemCategory: params.analysis.problemCategory,
-              problemResolved: params.analysis.problemResolved,
+              title: params.analysis.title,
+              overallComment: params.analysis.overallComment,
+              criteria: params.analysis.criteria,
+              totalScore: params.analysis.totalScore,
+              maxScore: params.analysis.maxScore,
+              percentage: params.analysis.percentage,
               score: params.analysis.score,
-              summary: params.analysis.summary,
             }),
           },
         ],
@@ -92,12 +95,15 @@ export async function appendCallToDailyThread(params: {
 
 type CallAnalysisResultLike = Pick<
   CallAnalysis,
-  | "problemCategory"
-  | "problemResolved"
+  | "title"
+  | "overallComment"
+  | "criteria"
+  | "totalScore"
+  | "maxScore"
+  | "percentage"
   | "operatorName"
   | "operatorCode"
   | "appName"
-  | "summary"
   | "score"
 >;
 

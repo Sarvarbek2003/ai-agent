@@ -130,7 +130,7 @@ async function analyzeSavedTranscript(call: LoadedCall, transcript: Transcript):
     call.operator = operator;
   }
 
-  const { result, responseId, promptId, scoringAgentId, model } = await analyzeTranscript(call, transcript, {
+  const { result, raw, responseId, promptId, scoringAgentId, model } = await analyzeTranscript(call, transcript, {
     operator,
     appName: call.app?.name ?? operator?.app.name,
   });
@@ -142,16 +142,34 @@ async function analyzeSavedTranscript(call: LoadedCall, transcript: Transcript):
       openaiResponseId: responseId,
       analysisPromptId: promptId,
       scoringAgentId,
-      rawJson: result,
-      ...result,
+      rawJson: raw as Prisma.InputJsonValue,
+      title: result.title,
+      criteria: result.criteria as unknown as Prisma.InputJsonValue,
+      totalScore: result.totalScore,
+      maxScore: result.maxScore,
+      percentage: result.percentage,
+      overallComment: result.overallComment,
+      score: result.score,
+      operatorName: result.operatorName,
+      operatorCode: result.operatorCode,
+      appName: result.appName,
     },
     update: {
       model,
       openaiResponseId: responseId,
       analysisPromptId: promptId,
       scoringAgentId,
-      rawJson: result,
-      ...result,
+      rawJson: raw as Prisma.InputJsonValue,
+      title: result.title,
+      criteria: result.criteria as unknown as Prisma.InputJsonValue,
+      totalScore: result.totalScore,
+      maxScore: result.maxScore,
+      percentage: result.percentage,
+      overallComment: result.overallComment,
+      score: result.score,
+      operatorName: result.operatorName,
+      operatorCode: result.operatorCode,
+      appName: result.appName,
     },
   });
 

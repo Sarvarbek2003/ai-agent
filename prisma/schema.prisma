@@ -176,35 +176,32 @@ model ScoringAgent {
 }
 
 model CallAnalysis {
-  id                           String       @id @default(cuid())
-  callId                       String       @unique
-  call                         Call         @relation(fields: [callId], references: [id], onDelete: Cascade)
-  dailyThreadId                String?
-  dailyThread                  DailyThread? @relation(fields: [dailyThreadId], references: [id])
-  model                        String
-  customerMainProblem          String?
-  problemCategory              String?
-  customerEmotionalState       String?
-  operatorCommunicationQuality String?
-  operatorUnderstoodCustomer   String?
-  customerUnderstoodOperator   String?
-  problemResolved              String?
-  operatorName                 String?
-  operatorCode                 String?
-  appName                      String?
-  summary                      String?
-  internalNote                 String?
-  score                        Int?
-  rawJson                      Json
-  openaiResponseId             String?
-  analysisPromptId             String?
-  scoringAgentId               String?
-  scoringAgent                 ScoringAgent? @relation(fields: [scoringAgentId], references: [id], onDelete: SetNull)
-  createdAt                    DateTime     @default(now())
-  updatedAt                    DateTime     @updatedAt
+  id                 String         @id @default(cuid())
+  callId             String         @unique
+  call               Call           @relation(fields: [callId], references: [id], onDelete: Cascade)
+  dailyThreadId      String?
+  dailyThread        DailyThread?   @relation(fields: [dailyThreadId], references: [id])
+  model              String
+  title              String?
+  criteria           Json?
+  totalScore         Float?
+  maxScore           Float?
+  percentage         Float?
+  overallComment     String?
+  operatorName       String?
+  operatorCode       String?
+  appName            String?
+  score              Int?
+  rawJson            Json
+  openaiResponseId   String?
+  analysisPromptId   String?
+  scoringAgentId     String?
+  scoringAgent       ScoringAgent?  @relation(fields: [scoringAgentId], references: [id], onDelete: SetNull)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
-  @@index([problemCategory])
   @@index([score])
+  @@index([percentage])
   @@index([operatorCode])
   @@index([appName])
   @@index([createdAt])

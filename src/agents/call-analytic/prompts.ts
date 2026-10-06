@@ -1,51 +1,6 @@
-export const CALL_ANALYSIS_INSTRUCTIONS = `You are a call center conversation analyst.
+export const CALL_ANALYSIS_INSTRUCTIONS = `Sen call-center suhbatlarini tahlil qiluvchi AI'san. Tahlilni har doim o'zbek tilida yoz. Audio transkripsiyasidan operator va mijozni aniqlagin. Har bir qo'ng'iroq uchun qisqa note yarat. Operatorni baholashda yuklangan Vector Store'dagi Kirish.docx va Chiqish.docx fayllaridan foydalan. Javob va baholashni ushbu fayllardagi mezonlarga asosla. Fayllarda mavjud bo‘lmagan mezon yoki qoidani o‘zing yaratma. Natijani JSON formatida qaytar.`;
 
-Analyze the conversation between an operator and a customer.
-
-Language:
-- Always write the analysis in Uzbek.
-- Operators mostly speak Uzbek. Treat Uzbek as the default and highest-priority language.
-- Detect any other language from the transcript itself (Russian, English, mixed, etc.). Do not assume Russian unless the speech is clearly not Uzbek.
-- If the conversation is mixed, follow the operator's Uzbek and still understand the customer's language.
-- Write all descriptive fields (customerMainProblem, operatorCommunicationQuality, summary, internalNote) in Uzbek, even if the conversation is in another language.
-
-How to find the operator name (PRIMARY SOURCE = transcript):
-- Extract the operator's spoken name from the transcript. This is the main source. Do not copy a directory name if the transcript already has a name.
-- Typical operator greeting: "Assalomu alaykum, xurmatli mijoz, men Anjirpay operator bo'laman, Ismim Abduxon, sizga yordam beraman."
-- Look for patterns like: "ismim X", "mening ismim X", "men X", "operator X", "X operator".
-- The first human operator after the IVR/autobot is the operator. Ignore the autobot's voice as an operator name.
-- metadata.operatorDirectory is only a weak hint (extension code / possible name). Spoken transcript name always wins.
-- If no name is spoken, use "unknown". Do not invent a name.
-
-How to find the app name (PRIMARY SOURCE = transcript):
-- Extract the product/app name from the opening IVR/autobot and from the operator greeting.
-- Typical autobot: "Assalomu alaykum, Milliy payga xush kelibsiz. Siz mijozlarni qo'llab-quvvatlash markaziga qo'ng'iroq qildingiz. Xizmat sifatini yaxshilash maqsadida operator bilan suhbatingiz yozib olinadi."
-- The app name can be misspelled or spoken differently: "anjr pay", "millpay", "milliypay", "AnjirPay", "Milliy pay", "mig send". Detect it anyway.
-- Put the name you heard into appName even if it is messy. metadata.knownApps is only a helper list for recognition, not a filter. If the spoken app is not in that list, still write it.
-- Do not invent an app that was never said.
-
-Rules:
-- Use only information present in the transcript and the provided call metadata.
-- Do not invent names, facts, promises, or outcomes that are not in the conversation.
-- If something is not clear from the transcript, use "unknown".
-- Categorical fields must stay in English enums.
-
-Determine:
-1. Customer's main problem.
-2. Problem category.
-3. Customer emotional state.
-4. Operator communication quality.
-5. Whether the operator understood the customer.
-6. Whether the customer understood the operator.
-7. Whether the problem was resolved.
-8. Short summary. Use the operator name and app name found in the transcript.
-9. Internal note for daily reporting. Include spoken operator name, extension code if known, and app.
-10. Score from 0 to 100 for operator handling quality.
-11. operatorName from the transcript. operatorCode from metadata.firstAnswer/operatorNumber if present, else "unknown". appName from the transcript.
-
-Return only valid JSON that matches the schema.`;
-
-export const CALL_ANALYSIS_INSTRUCTIONS_UZBEK = `Sen call-center suhbatlarini tahlil qiluvchi AI'san. Tahlilni har doim o'zbek tilida yoz. Audio transkripsiyasidan operator va mijozni aniqlagin. Operator ismi, qaysi ilova operatori ekanligi, mijoz murojaatining sababini, muammo kategoriyasini, mijoz kayfiyatini, operatorning tushuntirish sifatini va muammo hal bo'lgan-bo'lmaganini aniqlagin. Operator ishini 0 dan 100 gacha ball bilan bahola. Har bir qo'ng'iroq uchun qisqa note yarat. Natijani JSON formatida qaytar.`;
+export const CALL_ANALYSIS_INSTRUCTIONS_UZBEK = CALL_ANALYSIS_INSTRUCTIONS;
 
 export const DEFAULT_ANALYSIS_PROMPT_ID = "structured";
 
@@ -53,13 +8,13 @@ export const analysisPromptCatalog = [
   {
     id: "structured",
     name: "Batafsil tahlil",
-    description: "Joriy prompt. Operator ismi va ilovani transkriptdan ajratib, to‘liq JSON tahlil qaytaradi.",
+    description: "Platform agent prompt. Vector Store’dagi Kirish/Chiqish mezonlari bo‘yicha JSON baholash.",
     instructions: CALL_ANALYSIS_INSTRUCTIONS,
   },
   {
     id: "uzbek-brief",
     name: "Qisqa o‘zbek tahlili",
-    description: "Yangi prompt. Operator, ilova, muammo, kayfiyat va hal bo‘lishini qisqa tahlil qiladi.",
+    description: "Vector Store mezonlari bo‘yicha qisqa o‘zbek tahlili va JSON baholash.",
     instructions: CALL_ANALYSIS_INSTRUCTIONS_UZBEK,
   },
 ] as const;
@@ -70,80 +25,52 @@ export function getAnalysisPromptById(id?: string | null) {
   return analysisPromptCatalog.find((prompt) => prompt.id === id) ?? analysisPromptCatalog[0];
 }
 
-export const DAILY_THREAD_INSTRUCTIONS = `You are the daily memory of a call-center analytic agent.
+export const DAILY_THREAD_INSTRUCTIONS = `You are the daily memory of a call-center scoring agent.
 
-Throughout the day you will receive analyzed operator-customer calls.
+Throughout the day you will receive scored operator-customer calls.
+Each call has title, criteria scores, total_score, max_score, percentage, and overall_comment.
 Remember every call in this conversation.
 
-Language: write dailySummary, recommendations, customerMoodSummary, operatorQualitySummary, and notable call reasons in Uzbek. Operators mostly speak Uzbek.
+Language: write dailySummary, recommendations, operatorQualitySummary, and notable call reasons in Uzbek.
 
 When asked for a daily report, answer only from this conversation.
-Do not ask for a database. Do not invent calls that were not sent to you.
+Do not invent criteria, scores, or calls that were not sent to you.
+Do not invent problem categories or mood fields.
 
 Return only valid JSON for the daily report schema.`;
 
-export const DAILY_REPORT_PROMPT = `Kun oxiri. Shu suhbatdagi barcha tahlil qilingan qo'ng'iroqlar asosida kunlik hisobot yoz.
+export const DAILY_REPORT_PROMPT = `Kun oxiri. Shu suhbatdagi barcha baholangan qo'ng'iroqlar asosida kunlik hisobot yoz.
 
-Hisobot matnlarini o'zbek tilida yoz. Operatorlar asosan o'zbek tilida gaplashadi.
-Bazadan o'qima. Faqat shu conversationdagi ma'lumotlarga tayan.
-Hech narsa uydirma.`;
+Hisobot matnlarini o'zbek tilida yoz.
+Faqat title, mezon ballari, percentage va overall_comment asosida yoz.
+Muammo kategoriyasi yoki kayfiyat maydonini o'zing yaratma.
+Bazadan o'qima. Hech narsa uydirma.`;
 
 export const callAnalysisJsonSchema = {
   type: "object",
   additionalProperties: false,
-  required: [
-    "customerMainProblem",
-    "problemCategory",
-    "customerEmotionalState",
-    "operatorCommunicationQuality",
-    "operatorUnderstoodCustomer",
-    "customerUnderstoodOperator",
-    "problemResolved",
-    "operatorName",
-    "operatorCode",
-    "appName",
-    "summary",
-    "internalNote",
-    "score",
-  ],
+  required: ["title", "criteria", "total_score", "max_score", "percentage", "overall_comment"],
   properties: {
-    customerMainProblem: { type: "string" },
-    problemCategory: {
-      type: "string",
-      enum: [
-        "billing",
-        "technical",
-        "complaint",
-        "information",
-        "sales",
-        "connection",
-        "other",
-        "unknown",
-      ],
+    title: { type: "string" },
+    criteria: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["name", "score", "max_score", "evidence", "comment"],
+        properties: {
+          name: { type: "string" },
+          score: { type: "number" },
+          max_score: { type: "number" },
+          evidence: { type: "string" },
+          comment: { type: "string" },
+        },
+      },
     },
-    customerEmotionalState: {
-      type: "string",
-      enum: ["calm", "confused", "frustrated", "angry", "satisfied", "unknown"],
-    },
-    operatorCommunicationQuality: { type: "string" },
-    operatorUnderstoodCustomer: {
-      type: "string",
-      enum: ["yes", "no", "unknown"],
-    },
-    customerUnderstoodOperator: {
-      type: "string",
-      enum: ["yes", "no", "unknown"],
-    },
-    problemResolved: {
-      type: "string",
-      enum: ["yes", "no", "partial", "unknown"],
-    },
-    operatorName: { type: "string" },
-    operatorCode: { type: "string" },
-    appName: { type: "string" },
-    summary: { type: "string" },
-    internalNote: { type: "string" },
-    score: { type: "integer", minimum: 0, maximum: 100 },
+    total_score: { type: "number" },
+    max_score: { type: "number" },
+    percentage: { type: "number" },
+    overall_comment: { type: "string" },
   },
 } as const;
 
@@ -153,12 +80,7 @@ export const dailyReportJsonSchema = {
   required: [
     "date",
     "totalCalls",
-    "resolvedCount",
-    "unresolvedCount",
-    "partialCount",
-    "averageScore",
-    "topProblemCategories",
-    "customerMoodSummary",
+    "averagePercentage",
     "operatorQualitySummary",
     "notableCalls",
     "dailySummary",
@@ -167,36 +89,21 @@ export const dailyReportJsonSchema = {
   properties: {
     date: { type: "string" },
     totalCalls: { type: "integer" },
-    resolvedCount: { type: "integer" },
-    unresolvedCount: { type: "integer" },
-    partialCount: { type: "integer" },
-    averageScore: { type: "number" },
-    topProblemCategories: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["category", "count"],
-        properties: {
-          category: { type: "string" },
-          count: { type: "integer" },
-        },
-      },
-    },
-    customerMoodSummary: { type: "string" },
+    averagePercentage: { type: "number" },
     operatorQualitySummary: { type: "string" },
     notableCalls: {
       type: "array",
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["vpbxId", "operatorName", "appName", "reason", "score"],
+        required: ["vpbxId", "operatorName", "appName", "title", "reason", "percentage"],
         properties: {
           vpbxId: { type: "string" },
           operatorName: { type: "string" },
           appName: { type: "string" },
+          title: { type: "string" },
           reason: { type: "string" },
-          score: { type: "integer" },
+          percentage: { type: "number" },
         },
       },
     },
@@ -208,33 +115,92 @@ export const dailyReportJsonSchema = {
   },
 } as const;
 
+export type ScoringCriterion = {
+  name: string;
+  score: number;
+  maxScore: number;
+  evidence: string;
+  comment: string;
+};
+
 export type CallAnalysisResult = {
-  customerMainProblem: string;
-  problemCategory: string;
-  customerEmotionalState: string;
-  operatorCommunicationQuality: string;
-  operatorUnderstoodCustomer: string;
-  customerUnderstoodOperator: string;
-  problemResolved: string;
+  title: string;
+  criteria: ScoringCriterion[];
+  totalScore: number;
+  maxScore: number;
+  percentage: number;
+  overallComment: string;
+  score: number;
   operatorName: string;
   operatorCode: string;
   appName: string;
-  summary: string;
-  internalNote: string;
-  score: number;
 };
+
+function asNumber(value: unknown, fallback = 0): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function asString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value.trim() : fallback;
+}
+
+export function isScoringAnalysis(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const row = value as Record<string, unknown>;
+  return typeof row.title === "string" && Array.isArray(row.criteria);
+}
+
+export function normalizeCallAnalysis(
+  raw: Record<string, unknown>,
+  identity: { operatorName: string; operatorCode: string; appName: string },
+): CallAnalysisResult {
+  const criteria = (Array.isArray(raw.criteria) ? raw.criteria : []).map((item) => {
+    const row = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+    return {
+      name: asString(row.name),
+      score: asNumber(row.score),
+      maxScore: asNumber(row.maxScore ?? row.max_score),
+      evidence: asString(row.evidence),
+      comment: asString(row.comment),
+    };
+  });
+  const totalScore = asNumber(raw.totalScore ?? raw.total_score);
+  const maxScore = asNumber(raw.maxScore ?? raw.max_score);
+  const percentage = asNumber(
+    raw.percentage,
+    maxScore > 0 ? (totalScore / maxScore) * 100 : 0,
+  );
+
+  return {
+    title: asString(raw.title),
+    criteria,
+    totalScore,
+    maxScore,
+    percentage,
+    overallComment: asString(raw.overallComment ?? raw.overall_comment),
+    score: Math.round(percentage),
+    operatorName: identity.operatorName,
+    operatorCode: identity.operatorCode,
+    appName: identity.appName,
+  };
+}
 
 export type DailyReportResult = {
   date: string;
   totalCalls: number;
-  resolvedCount: number;
-  unresolvedCount: number;
-  partialCount: number;
-  averageScore: number;
-  topProblemCategories: Array<{ category: string; count: number }>;
-  customerMoodSummary: string;
+  averagePercentage: number;
   operatorQualitySummary: string;
-  notableCalls: Array<{ vpbxId: string; operatorName: string; appName: string; reason: string; score: number }>;
+  notableCalls: Array<{
+    vpbxId: string;
+    operatorName: string;
+    appName: string;
+    title: string;
+    reason: string;
+    percentage: number;
+  }>;
   dailySummary: string;
   recommendations: string[];
 };
