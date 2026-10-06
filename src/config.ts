@@ -16,7 +16,6 @@ export const config = {
   port: Number(process.env.PORT) || 5050,
   databaseUrl: requiredInProduction("DATABASE_URL"),
   openaiApiKey: optional("OPENAI_API_KEY"),
-  openaiAgentId: optional("OPENAI_AGENT_ID", "agent_e356d84f030e46b089c782b2df34c2518c80b2c1c10c4ceebd"),
   analysisModel: optional("OPENAI_ANALYSIS_MODEL", "gpt-4o"),
   agentModel: optional("OPENAI_AGENT_MODEL", "gpt-5.6-luna"),
   transcribeModel: "gpt-transcribe",

@@ -1,9 +1,8 @@
 import { Call, Transcript } from "@prisma/client";
-import { config } from "../../config";
 import { parseJsonText } from "../../lib/openai";
 import { getActiveAnalysisPrompt } from "../../lib/settings";
 import { getActiveScoringAgent } from "../../lib/scoring-agents";
-import { runDailyOpenAIAgentSession } from "../../lib/openai-agents";
+import { runFileSearchAnalysis, vectorStoreIdForCall } from "../../lib/openai-file-search";
 import { OperatorWithApp } from "../../lib/operators";
 import { isScoringAnalysis, normalizeCallAnalysis, CallAnalysisResult } from "./prompts";
 
@@ -38,36 +37,49 @@ export async function analyzeTranscript(
   scoringAgentId?: string;
   model: string;
 }> {
-  if (!config.openaiAgentId) {
-    throw new Error("OPENAI_AGENT_ID is not configured");
+  const scoringAgent = await getActiveScoringAgent();
+  if (!scoringAgent) {
+    throw new Error("Faol baholash agenti yo‘q. Sozlamalardan kiruvchi/chiquvchi mezon .docx yuklang.");
+  }
+
+  const direction = call.direction === "outbound" ? "outbound" : "inbound";
+  const vectorStoreId = vectorStoreIdForCall(scoringAgent, direction);
+  if (!vectorStoreId) {
+    throw new Error(`${direction} vector store hali yaratilmagan. Baholash agentini qayta saqlang.`);
   }
 
   const operator = options?.operator ?? null;
   const prompt = await getActiveAnalysisPrompt();
-  const scoringAgent = await getActiveScoringAgent();
-  const direction = call.direction === "outbound" ? "outbound" : "inbound";
-  const scoringFile = direction === "outbound" ? "Chiqish.docx" : "Kirish.docx";
+  const scoringFile = direction === "outbound" ? scoringAgent.outboundCriteriaFileName : scoringAgent.inboundCriteriaFileName;
+  const toolName = direction === "outbound" ? "chiquvchi file_search" : "kiruvchi file_search";
 
   const input = JSON.stringify({
     type: "new_call",
     vpbxId: call.vpbxId,
     direction: call.direction,
     scoringFile,
+    fileSearchTool: toolName,
     firstAnswer: call.firstAnswer,
     operatorNumber: call.operatorNumber,
     durationSec: call.durationSec,
     transcript: formatTranscript(transcript),
   });
 
-  const session = await runDailyOpenAIAgentSession({
-    localDate: call.endedAt ?? call.createdAt,
-    agentId: config.openaiAgentId,
+  const instructions = `${prompt.instructions}
+
+Bu qo'ng'iroq ${direction === "outbound" ? "chiquvchi (outbound)" : "kiruvchi (inbound)"}.
+file_search tool orqali faqat shu yo'nalish uchun yuklangan mezon faylini o'qi: ${scoringFile}.
+Boshqa yo'nalish mezonini ishlatma. Faylda yo'q mezon yoki qoidani o'zing yaratma.`;
+
+  const session = await runFileSearchAnalysis({
+    vectorStoreId,
+    instructions,
     input,
   });
 
   const parsed = parseJsonText<Record<string, unknown>>(session.text);
   if (!isScoringAnalysis(parsed)) {
-    throw new Error("OpenAI agent returned an unexpected scoring JSON");
+    throw new Error("OpenAI file search returned an unexpected scoring JSON");
   }
 
   const result = normalizeCallAnalysis(parsed, {
@@ -79,9 +91,9 @@ export async function analyzeTranscript(
   return {
     result,
     raw: parsed,
-    responseId: session.sessionId,
+    responseId: session.responseId,
     promptId: prompt.id,
-    scoringAgentId: scoringAgent?.id,
+    scoringAgentId: scoringAgent.id,
     model: session.model,
   };
 }

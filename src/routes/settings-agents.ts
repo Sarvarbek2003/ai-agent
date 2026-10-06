@@ -11,10 +11,10 @@ import {
   uniqueAgentSlug,
 } from "../lib/scoring-agents";
 import {
-  deleteOpenAIScoringAgent,
-  openaiAgentErrorMessage,
-  syncOpenAIScoringAgent,
-} from "../lib/openai-agents";
+  deleteScoringVectorStores,
+  openaiFileSearchErrorMessage,
+  syncScoringVectorStores,
+} from "../lib/openai-file-search";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -109,10 +109,13 @@ scoringAgentsRouter.post(
 
     let synced;
     try {
-      synced = await syncOpenAIScoringAgent(withFiles);
+      synced = await syncScoringVectorStores(withFiles, {
+        inbound: { buffer: inbound.buffer, originalname: inbound.originalname },
+        outbound: { buffer: outbound.buffer, originalname: outbound.originalname },
+      });
     } catch (error) {
       await prisma.scoringAgent.delete({ where: { id: withFiles.id } }).catch(() => undefined);
-      throw new HttpError(502, openaiAgentErrorMessage(error));
+      throw new HttpError(502, openaiFileSearchErrorMessage(error));
     }
 
     const saved = makeActive ? await setActiveScoringAgent(synced.id) : synced;
@@ -183,9 +186,12 @@ scoringAgentsRouter.patch(
     });
     let synced;
     try {
-      synced = await syncOpenAIScoringAgent(updated);
+      synced = await syncScoringVectorStores(updated, {
+        inbound: inbound ? { buffer: inbound.buffer, originalname: inbound.originalname } : undefined,
+        outbound: outbound ? { buffer: outbound.buffer, originalname: outbound.originalname } : undefined,
+      });
     } catch (error) {
-      throw new HttpError(502, openaiAgentErrorMessage(error));
+      throw new HttpError(502, openaiFileSearchErrorMessage(error));
     }
     const saved =
       String(req.body?.isActive ?? "") === "true" ? await setActiveScoringAgent(synced.id) : synced;
@@ -205,9 +211,9 @@ scoringAgentsRouter.post(
     }
     let synced = existing;
     try {
-      synced = await syncOpenAIScoringAgent(existing);
+      synced = await syncScoringVectorStores(existing);
     } catch (error) {
-      throw new HttpError(502, openaiAgentErrorMessage(error));
+      throw new HttpError(502, openaiFileSearchErrorMessage(error));
     }
     const saved = await setActiveScoringAgent(synced.id);
     res.json(serializeScoringAgent(saved));
@@ -224,7 +230,7 @@ scoringAgentsRouter.delete(
     if (!existing) {
       throw new HttpError(404, "Agent not found");
     }
-    await deleteOpenAIScoringAgent(existing);
+    await deleteScoringVectorStores(existing);
     await prisma.scoringAgent.delete({ where: { id: existing.id } });
     res.status(204).end();
   }),

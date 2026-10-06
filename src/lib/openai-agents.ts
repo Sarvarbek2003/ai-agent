@@ -1,9 +1,7 @@
-import { ScoringAgent } from "@prisma/client";
 import { APIError } from "openai";
 import { config } from "../config";
 import { callAnalysisJsonSchema } from "../agents/call-analytic/prompts";
 import { getOrCreateDailyThread } from "../agents/call-analytic/daily-thread";
-import { getActiveAnalysisPrompt } from "./settings";
 import { prisma } from "./prisma";
 import { getOpenAI, parseJsonText } from "./openai";
 import { sleep } from "./dates";
@@ -96,104 +94,6 @@ function withDailySessionLock<T>(run: () => Promise<T>): Promise<T> {
     () => undefined,
   );
   return next;
-}
-
-async function upsertDirectionAgent(
-  agent: ScoringAgent,
-  direction: CallDirection,
-  existingId: string | null | undefined,
-  instructions: string,
-): Promise<string> {
-  const openai = getOpenAI();
-  const name = `${agent.name} (${direction})`;
-  const body = {
-    name,
-    metadata: {
-      scoringAgentId: agent.id,
-      direction,
-    },
-    ...lunaAgentConfig(instructions),
-  };
-
-  if (existingId) {
-    try {
-      const updated = await openai.beta.agents.update(existingId, body, { timeout: 60_000 });
-      return updated.id;
-    } catch (error) {
-      if (!(error instanceof APIError && error.status === 404)) {
-        throw error;
-      }
-    }
-  }
-
-  const created = await openai.beta.agents.create(body, { timeout: 60_000 });
-  return created.id;
-}
-
-export async function syncOpenAIScoringAgent(agent: ScoringAgent): Promise<ScoringAgent> {
-  const prompt = await getActiveAnalysisPrompt();
-  const inboundId = await upsertDirectionAgent(
-    agent,
-    "inbound",
-    agent.openaiInboundAgentId,
-    scoringAgentInstructions({
-      name: agent.name,
-      direction: "inbound",
-      prompt: prompt.instructions,
-      criteria: agent.inboundCriteriaText,
-    }),
-  );
-  const outboundId = await upsertDirectionAgent(
-    agent,
-    "outbound",
-    agent.openaiOutboundAgentId,
-    scoringAgentInstructions({
-      name: agent.name,
-      direction: "outbound",
-      prompt: prompt.instructions,
-      criteria: agent.outboundCriteriaText,
-    }),
-  );
-
-  if (inboundId === agent.openaiInboundAgentId && outboundId === agent.openaiOutboundAgentId) {
-    return agent;
-  }
-
-  return prisma.scoringAgent.update({
-    where: { id: agent.id },
-    data: {
-      openaiInboundAgentId: inboundId,
-      openaiOutboundAgentId: outboundId,
-    },
-  });
-}
-
-export async function syncAllOpenAIScoringAgents(): Promise<void> {
-  const agents = await prisma.scoringAgent.findMany();
-  for (const agent of agents) {
-    await syncOpenAIScoringAgent(agent);
-  }
-}
-
-export async function deleteOpenAIScoringAgent(agent: ScoringAgent): Promise<void> {
-  const openai = getOpenAI();
-  for (const agentId of [agent.openaiInboundAgentId, agent.openaiOutboundAgentId]) {
-    if (!agentId) {
-      continue;
-    }
-    try {
-      await openai.beta.agents.delete(agentId);
-    } catch (error) {
-      if (error instanceof APIError && error.status === 404) {
-        continue;
-      }
-      console.error("Failed to delete OpenAI agent", agentId, error);
-    }
-  }
-}
-
-export function openaiAgentIdForCall(agent: ScoringAgent, direction: CallDirection): string | null {
-  return (direction === "outbound" ? agent.openaiOutboundAgentId : agent.openaiInboundAgentId) ?? null;
 }
 
 function extractSessionItemText(item: { type?: string; role?: string; phase?: string | null; content?: Array<{ type?: string; text?: string }> }): string {

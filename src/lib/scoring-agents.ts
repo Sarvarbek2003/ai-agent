@@ -54,8 +54,8 @@ export function serializeScoringAgent(agent: ScoringAgent, options?: { includeTe
     outboundCriteriaFileName: agent.outboundCriteriaFileName,
     inboundCriteriaText: options?.includeText ? agent.inboundCriteriaText : undefined,
     outboundCriteriaText: options?.includeText ? agent.outboundCriteriaText : undefined,
-    openaiInboundAgentId: agent.openaiInboundAgentId,
-    openaiOutboundAgentId: agent.openaiOutboundAgentId,
+    inboundVectorStoreId: agent.openaiInboundVectorStoreId,
+    outboundVectorStoreId: agent.openaiOutboundVectorStoreId,
     createdAt: agent.createdAt,
     updatedAt: agent.updatedAt,
   };

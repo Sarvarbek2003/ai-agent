@@ -162,12 +162,14 @@ model ScoringAgent {
   isActive                   Boolean        @default(false)
   inboundCriteriaFileName    String
   inboundCriteriaText        String
-  inboundCriteriaObjectKey   String?
-  outboundCriteriaFileName   String
-  outboundCriteriaText       String
-  outboundCriteriaObjectKey  String?
-  openaiInboundAgentId       String?
-  openaiOutboundAgentId      String?
+  inboundCriteriaObjectKey    String?
+  outboundCriteriaFileName    String
+  outboundCriteriaText        String
+  outboundCriteriaObjectKey   String?
+  openaiInboundVectorStoreId  String?
+  openaiOutboundVectorStoreId String?
+  openaiInboundFileId         String?
+  openaiOutboundFileId        String?
   analyses                   CallAnalysis[]
   createdAt                  DateTime       @default(now())
   updatedAt                  DateTime       @updatedAt

@@ -8,7 +8,6 @@ import {
 } from "../lib/settings";
 import { prisma } from "../lib/prisma";
 import { serializeScoringAgent } from "../lib/scoring-agents";
-import { openaiAgentErrorMessage, syncAllOpenAIScoringAgents } from "../lib/openai-agents";
 
 export const settingsRouter = Router();
 
@@ -45,11 +44,6 @@ settingsRouter.patch(
     }
 
     const settings = await setActiveAnalysisPrompt(promptId);
-    try {
-      await syncAllOpenAIScoringAgents();
-    } catch (error) {
-      throw new HttpError(502, openaiAgentErrorMessage(error));
-    }
     res.json({
       activeAnalysisPromptId: settings.activeAnalysisPromptId,
       updatedAt: settings.updatedAt,

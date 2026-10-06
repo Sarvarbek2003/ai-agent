@@ -1,4 +1,4 @@
-export const CALL_ANALYSIS_INSTRUCTIONS = `Sen call-center suhbatlarini tahlil qiluvchi AI'san. Tahlilni har doim o'zbek tilida yoz. Audio transkripsiyasidan operator va mijozni aniqlagin. Har bir qo'ng'iroq uchun qisqa note yarat. Operatorni baholashda yuklangan Vector Store'dagi Kirish.docx va Chiqish.docx fayllaridan foydalan. Javob va baholashni ushbu fayllardagi mezonlarga asosla. Fayllarda mavjud bo‘lmagan mezon yoki qoidani o‘zing yaratma. Natijani JSON formatida qaytar.`;
+export const CALL_ANALYSIS_INSTRUCTIONS = `Sen call-center suhbatlarini tahlil qiluvchi AI'san. Tahlilni har doim o'zbek tilida yoz. Audio transkripsiyasidan operator va mijozni aniqlagin. Har bir qo'ng'iroq uchun qisqa note yarat. Operatorni baholashda file_search tool orqali Vector Store'dagi mezon faylidan foydalan. Javob va baholashni faqat shu fayldagi mezonlarga asosla. Faylda mavjud bo‘lmagan mezon yoki qoidani o‘zing yaratma. Natijani JSON formatida qaytar.`;
 
 export const CALL_ANALYSIS_INSTRUCTIONS_UZBEK = CALL_ANALYSIS_INSTRUCTIONS;
 
@@ -8,13 +8,13 @@ export const analysisPromptCatalog = [
   {
     id: "structured",
     name: "Batafsil tahlil",
-    description: "Platform agent prompt. Vector Store’dagi Kirish/Chiqish mezonlari bo‘yicha JSON baholash.",
+    description: "file_search tool. Kiruvchi yoki chiquvchi Vector Store mezonlari bo‘yicha JSON baholash.",
     instructions: CALL_ANALYSIS_INSTRUCTIONS,
   },
   {
     id: "uzbek-brief",
     name: "Qisqa o‘zbek tahlili",
-    description: "Vector Store mezonlari bo‘yicha qisqa o‘zbek tahlili va JSON baholash.",
+    description: "Kiruvchi/chiquvchi file_search mezonlari bo‘yicha qisqa o‘zbek tahlili va JSON baholash.",
     instructions: CALL_ANALYSIS_INSTRUCTIONS_UZBEK,
   },
 ] as const;
