@@ -1,7 +1,9 @@
 import { Call, CallStatus, Prisma, Transcript } from "@prisma/client";
 import { config } from "../../config";
+import { getRecordingObject } from "../../lib/minio";
 import { collectOperatorCodes, findOperatorByCodes, OperatorWithApp } from "../../lib/operators";
 import { prisma } from "../../lib/prisma";
+import { isAutoAnalysisEnabled } from "../../lib/settings";
 import { analyzeTranscript } from "./analyze";
 import { appendCallToDailyThread } from "./daily-thread";
 import { downloadAndStoreRecording } from "./recording";
@@ -30,7 +32,13 @@ export async function processCall(
     return;
   }
 
+  const autoAnalysisEnabled = await isAutoAnalysisEnabled();
+  const runPipeline = Boolean(options?.force || autoAnalysisEnabled);
+
   if (options?.fromTranscript) {
+    if (!runPipeline) {
+      return;
+    }
     if (call.status === CallStatus.failed) {
       return;
     }
@@ -47,40 +55,22 @@ export async function processCall(
     return;
   }
 
-  if (!call.callRecordLink) {
-    await prisma.call.update({
-      where: { id: call.id },
-      data: {
-        status: CallStatus.failed,
-        failedReason: "Call ended without a recording link",
-      },
-    });
-    return;
-  }
-
   try {
+    const audio = await ensureStoredRecording(call);
+    if (!runPipeline) {
+      await prisma.call.update({
+        where: { id: call.id },
+        data: { status: CallStatus.transcribing, failedReason: null },
+      });
+      return;
+    }
+
     await prisma.call.update({
       where: { id: call.id },
       data: { status: CallStatus.transcribing, failedReason: null },
     });
 
-    const recording = await downloadAndStoreRecording({
-      url: call.callRecordLink,
-      vpbxId: call.vpbxId,
-    });
-
-    await prisma.call.update({
-      where: { id: call.id },
-      data: {
-        recordingBucket: recording.bucket,
-        recordingObjectKey: recording.objectKey,
-        recordingUrl: recording.url,
-        recordingMimeType: recording.mimeType,
-        recordingSizeBytes: recording.sizeBytes,
-      },
-    });
-
-    const transcript = await transcribeCallRecording(recording.body, recording.fileName);
+    const transcript = await transcribeCallRecording(audio.body, audio.fileName);
     const savedTranscript = await prisma.transcript.upsert({
       where: { callId: call.id },
       create: {
@@ -105,6 +95,61 @@ export async function processCall(
     await markFailed(call.id, error);
     throw error;
   }
+}
+
+function fileNameFromObjectKey(objectKey: string, vpbxId: string): string {
+  const part = objectKey.split("/").pop();
+  return part && part.includes(".") ? part : `${vpbxId}.mp3`;
+}
+
+async function loadStoredAudio(call: Call): Promise<{ body: Buffer; fileName: string } | null> {
+  if (!call.recordingObjectKey) {
+    return null;
+  }
+  try {
+    return {
+      body: await getRecordingObject(call.recordingObjectKey),
+      fileName: fileNameFromObjectKey(call.recordingObjectKey, call.vpbxId),
+    };
+  } catch (error) {
+    console.error("Failed to load call recording from MinIO", call.recordingObjectKey, error);
+    return null;
+  }
+}
+
+async function ensureStoredRecording(call: Call): Promise<{ body: Buffer; fileName: string }> {
+  const stored = await loadStoredAudio(call);
+  if (stored) {
+    return stored;
+  }
+
+  if (!call.callRecordLink) {
+    throw new Error("Call ended without a recording link");
+  }
+
+  await prisma.call.update({
+    where: { id: call.id },
+    data: { status: CallStatus.transcribing, failedReason: null },
+  });
+
+  const recording = await downloadAndStoreRecording({
+    url: call.callRecordLink,
+    vpbxId: call.vpbxId,
+  });
+
+  await prisma.call.update({
+    where: { id: call.id },
+    data: {
+      recordingBucket: recording.bucket,
+      recordingObjectKey: recording.objectKey,
+      recordingUrl: recording.url,
+      recordingMimeType: recording.mimeType,
+      recordingSizeBytes: recording.sizeBytes,
+    },
+  });
+  call.recordingObjectKey = recording.objectKey;
+
+  return { body: recording.body, fileName: recording.fileName };
 }
 
 async function analyzeSavedTranscript(call: LoadedCall, transcript: Transcript): Promise<void> {

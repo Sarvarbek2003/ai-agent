@@ -47,6 +47,22 @@ export async function setActiveAnalysisPrompt(id: string) {
   });
 }
 
+export async function isAutoAnalysisEnabled(): Promise<boolean> {
+  const settings = await getAppSettings();
+  return settings.autoAnalysisEnabled;
+}
+
+export async function setAutoAnalysisEnabled(enabled: boolean) {
+  return prisma.appSetting.upsert({
+    where: { id: "app" },
+    create: {
+      id: "app",
+      autoAnalysisEnabled: enabled,
+    },
+    update: { autoAnalysisEnabled: enabled },
+  });
+}
+
 export function listAnalysisPrompts() {
   return analysisPromptCatalog.map((prompt) => ({
     id: prompt.id,

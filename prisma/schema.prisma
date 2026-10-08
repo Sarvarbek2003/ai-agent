@@ -48,6 +48,7 @@ model WebhookEvent {
 model AppSetting {
   id                     String   @id @default("app")
   activeAnalysisPromptId String   @default("structured")
+  autoAnalysisEnabled    Boolean  @default(true)
   updatedAt              DateTime @updatedAt
 }
 

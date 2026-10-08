@@ -2,6 +2,7 @@ import { CallStatus } from "@prisma/client";
 import { processCall } from "../agents/call-analytic/processor";
 import { enqueueUnique } from "../lib/queue";
 import { prisma } from "../lib/prisma";
+import { isAutoAnalysisEnabled } from "../lib/settings";
 
 const STALE_AFTER_MS = 10 * 60 * 1000;
 const STALE_UNTIL_MS = 30 * 60 * 1000;
@@ -12,6 +13,10 @@ let ticking = false;
 let interval: NodeJS.Timeout | undefined;
 
 export async function retryStaleAnalyses(): Promise<number> {
+  if (!(await isAutoAnalysisEnabled())) {
+    return 0;
+  }
+
   const now = Date.now();
   const staleBefore = new Date(now - STALE_AFTER_MS);
   const staleAfter = new Date(now - STALE_UNTIL_MS);

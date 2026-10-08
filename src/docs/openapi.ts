@@ -418,18 +418,21 @@ export const openApiSpec = {
       },
       patch: {
         tags: ["Settings"],
-        summary: "Switch the active analysis prompt without changing prompt text",
+        summary: "Update the active analysis prompt and/or auto transcription-analysis switch",
         requestBody: {
           required: true,
           content: {
             "application/json": {
               schema: {
                 type: "object",
-                required: ["activeAnalysisPromptId"],
                 properties: {
                   activeAnalysisPromptId: {
                     type: "string",
                     enum: ["structured", "uzbek-brief"],
+                  },
+                  autoAnalysisEnabled: {
+                    type: "boolean",
+                    description: "When false, recordings are stored in MinIO and the call stays transcribing until manual reprocess.",
                   },
                 },
               },
