@@ -2,10 +2,9 @@ import { CallStatus } from "@prisma/client";
 import { processCall } from "../agents/call-analytic/processor";
 import { enqueueUnique } from "../lib/queue";
 import { prisma } from "../lib/prisma";
-import { isAutoAnalysisEnabled } from "../lib/settings";
 
-const STALE_AFTER_MS = 10 * 60 * 1000;
-const STALE_UNTIL_MS = 30 * 60 * 1000;
+const READY_AFTER_MS = 10 * 60 * 1000;
+const LOOKBACK_MS = 24 * 60 * 60 * 1000;
 const INTERVAL_MS = 60 * 1000;
 const BATCH_SIZE = 20;
 
@@ -13,39 +12,25 @@ let ticking = false;
 let interval: NodeJS.Timeout | undefined;
 
 export async function retryStaleAnalyses(): Promise<number> {
-  if (!(await isAutoAnalysisEnabled())) {
-    return 0;
-  }
-
   const now = Date.now();
-  const staleBefore = new Date(now - STALE_AFTER_MS);
-  const staleAfter = new Date(now - STALE_UNTIL_MS);
+  const readyBefore = new Date(now - READY_AFTER_MS);
+  const lookbackAfter = new Date(now - LOOKBACK_MS);
   const calls = await prisma.call.findMany({
     where: {
-      createdAt: { gte: staleAfter, lte: staleBefore },
+      createdAt: { gte: lookbackAfter, lte: readyBefore },
+      callRecordLink: { not: null },
+      recordingObjectKey: null,
       status: {
-        notIn: [
-          CallStatus.analyzed,
-          CallStatus.failed,
-          CallStatus.skipped,
-          CallStatus.in_progress,
-          CallStatus.no_answer,
-        ],
+        notIn: [CallStatus.analyzed, CallStatus.skipped, CallStatus.in_progress, CallStatus.no_answer, CallStatus.ringing],
       },
-      analysis: { is: null },
     },
-    select: {
-      id: true,
-      transcript: { select: { id: true } },
-    },
+    select: { id: true },
     orderBy: { createdAt: "asc" },
     take: BATCH_SIZE,
   });
 
   for (const call of calls) {
-    enqueueUnique(`call:${call.id}`, () =>
-      processCall(call.id, call.transcript ? { fromTranscript: true } : undefined),
-    );
+    enqueueUnique(`call:${call.id}:recording`, () => processCall(call.id, { storeRecordingOnly: true }));
   }
 
   return calls.length;
@@ -65,10 +50,10 @@ export function startStaleAnalysisCron(): void {
     try {
       const count = await retryStaleAnalyses();
       if (count > 0) {
-        console.log(`Stale analysis cron queued ${count} call(s)`);
+        console.log(`Recording download cron queued ${count} call(s)`);
       }
     } catch (error) {
-      console.error("Stale analysis cron failed", error);
+      console.error("Recording download cron failed", error);
     } finally {
       ticking = false;
     }

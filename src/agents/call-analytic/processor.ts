@@ -17,7 +17,7 @@ type LoadedCall = Call & {
 
 export async function processCall(
   callId: string,
-  options?: { force?: boolean; fromTranscript?: boolean },
+  options?: { force?: boolean; fromTranscript?: boolean; storeRecordingOnly?: boolean },
 ): Promise<void> {
   const call = await prisma.call.findUnique({
     where: { id: callId },
@@ -34,6 +34,22 @@ export async function processCall(
 
   const autoAnalysisEnabled = await isAutoAnalysisEnabled();
   const runPipeline = Boolean(options?.force || autoAnalysisEnabled);
+
+  if (options?.storeRecordingOnly) {
+    try {
+      if (!call.recordingObjectKey) {
+        await ensureStoredRecording(call);
+      }
+      await prisma.call.update({
+        where: { id: call.id },
+        data: { status: CallStatus.transcribing, failedReason: null },
+      });
+    } catch (error) {
+      await markFailed(call.id, error);
+      throw error;
+    }
+    return;
+  }
 
   if (options?.fromTranscript) {
     if (!runPipeline) {
