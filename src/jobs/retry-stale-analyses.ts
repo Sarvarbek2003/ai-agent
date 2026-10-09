@@ -4,7 +4,7 @@ import { enqueueUnique } from "../lib/queue";
 import { prisma } from "../lib/prisma";
 
 const READY_AFTER_MS = 10 * 60 * 1000;
-const LOOKBACK_MS = 24 * 60 * 60 * 1000;
+const LOOKBACK_MS = 30 * 60 * 1000;
 const INTERVAL_MS = 60 * 1000;
 const BATCH_SIZE = 20;
 
