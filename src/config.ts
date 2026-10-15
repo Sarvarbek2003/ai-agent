@@ -27,6 +27,11 @@ export const config = {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean),
+  authSecret: requiredInProduction("AUTH_SECRET", process.env.NODE_ENV === "production" ? "" : "dev-auth-secret-change-me"),
+  dashboardEmail: optional("DASHBOARD_EMAIL", "admin@anjir.net").toLowerCase(),
+  dashboardPassword: optional("DASHBOARD_PASSWORD"),
+  dashboardName: optional("DASHBOARD_NAME", "Admin"),
+  authTokenTtlSec: Number(process.env.AUTH_TOKEN_TTL_SEC) || 60 * 60 * 24 * 7,
   minio: {
     endPoint: optional("MINIO_ENDPOINT", "localhost"),
     port: Number(process.env.MINIO_PORT) || 9000,

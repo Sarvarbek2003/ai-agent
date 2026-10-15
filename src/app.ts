@@ -10,12 +10,15 @@ import { askRouter } from "./routes/ask";
 import { callsRouter } from "./routes/calls";
 import { operatorsRouter } from "./routes/operators";
 import { reportsRouter } from "./routes/reports";
+import { requireAuth } from "./lib/auth";
+import { authRouter } from "./routes/auth";
 import { settingsRouter } from "./routes/settings";
 import { scoringAgentsRouter } from "./routes/settings-agents";
 import { dnidsRouter } from "./routes/settings-dnids";
 import { webhookRouter } from "./routes/webhooks";
 
 export const app = express();
+app.set("trust proxy", 1);
 
 app.use((req, res, next) => {
   const origin = process.env.FRONTEND_ORIGIN?.trim() || "*";
@@ -35,6 +38,7 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
+app.use(requireAuth);
 
 app.get("/health", async (_req, res) => {
   let database = "unknown";
@@ -65,6 +69,7 @@ app.get("/", (_req, res) => {
   });
 });
 
+app.use("/auth", authRouter);
 app.use("/agents", agentsRouter);
 app.use("/ask", askRouter);
 app.use("/apps", appsRouter);

@@ -3,6 +3,7 @@ import { app } from "./app";
 import { config, webhookUrl } from "./config";
 import { startStaleAnalysisCron } from "./jobs/retry-stale-analyses";
 import { ensureRecordingsBucket } from "./lib/minio";
+import { ensureDashboardUser } from "./lib/auth";
 import { ensureAppSettings } from "./lib/settings";
 import { ensureDefaultApps } from "./lib/operators";
 import { startTelegramBot } from "./telegram/bot";
@@ -13,6 +14,9 @@ const server = app.listen(config.port, () => {
   console.log(`NewTel webhook: ${webhookUrl()}`);
   void ensureAppSettings().catch((error) => {
     console.error("App settings seed failed", error);
+  });
+  void ensureDashboardUser().catch((error) => {
+    console.error("Dashboard user seed failed", error);
   });
   void ensureDefaultApps().catch((error) => {
     console.error("Default apps seed failed", error);

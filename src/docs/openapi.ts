@@ -11,6 +11,7 @@ export const openApiSpec = {
   servers: [{ url: "/", description: "Current server" }],
   tags: [
     { name: "Health" },
+    { name: "Auth" },
     { name: "Agents" },
     { name: "Ask" },
     { name: "Apps" },
@@ -42,6 +43,42 @@ export const openApiSpec = {
               },
             },
           },
+        },
+      },
+    },
+    "/auth/login": {
+      post: {
+        tags: ["Auth"],
+        summary: "Sign in to the dashboard",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["email", "password"],
+                properties: {
+                  email: { type: "string", example: "admin@anjir.net" },
+                  password: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "JWT and user" },
+          "401": { description: "Invalid credentials" },
+        },
+      },
+    },
+    "/auth/me": {
+      get: {
+        tags: ["Auth"],
+        summary: "Current dashboard user",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          "200": { description: "User" },
+          "401": { description: "Unauthorized" },
         },
       },
     },
@@ -537,6 +574,13 @@ export const openApiSpec = {
     },
   },
   components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: "http",
+        scheme: "bearer",
+        bearerFormat: "JWT",
+      },
+    },
     schemas: {
       NewtelWebhook: {
         type: "object",
